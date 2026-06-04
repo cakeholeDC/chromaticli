@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>chromaticli — preview gallery</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: Canvas; color: CanvasText;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  p.meta { margin: 0 0 24px; opacity: 0.65; font-size: 13px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+  }
+  .card { margin: 0; }
+  .card img { display: block; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .card figcaption { font-size: 12px; margin-top: 6px; line-height: 1.4; }
+  .card figcaption code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+  <h1>chromaticli — preview gallery</h1>
+  <p class="meta">12 themes. Generated from <code>themes.json</code> via <code>scripts/generate-preview.py</code>.</p>
+  <div class="grid">
+    <figure class="card">
+      <img src="themes/abyss.svg" alt="abyss" loading="lazy"/>
+      <figcaption><code>abyss</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/dark-modern.svg" alt="dark-modern" loading="lazy"/>
+      <figcaption><code>dark-modern</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/dark-pink.svg" alt="dark-pink" loading="lazy"/>
+      <figcaption><code>dark-pink</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/grass.svg" alt="grass" loading="lazy"/>
+      <figcaption><code>grass</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/kimbie-dark.svg" alt="kimbie-dark" loading="lazy"/>
+      <figcaption><code>kimbie-dark</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/light-modern.svg" alt="light-modern" loading="lazy"/>
+      <figcaption><code>light-modern</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/monokai.svg" alt="monokai" loading="lazy"/>
+      <figcaption><code>monokai</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/ocean.svg" alt="ocean" loading="lazy"/>
+      <figcaption><code>ocean</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/purple-rain.svg" alt="purple-rain" loading="lazy"/>
+      <figcaption><code>purple-rain</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/red-sands.svg" alt="red-sands" loading="lazy"/>
+      <figcaption><code>red-sands</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/solarized-dark.svg" alt="solarized-dark" loading="lazy"/>
+      <figcaption><code>solarized-dark</code></figcaption>
+    </figure>
+    <figure class="card">
+      <img src="themes/solarized-light.svg" alt="solarized-light" loading="lazy"/>
+      <figcaption><code>solarized-light</code></figcaption>
+    </figure>
+  </div>
+</body>
+</html>

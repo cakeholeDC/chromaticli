@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400">
+  <defs>
+    <linearGradient id="chromatic" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffadad" />
+      <stop offset="18%" stop-color="#ffd6a5" />
+      <stop offset="36%" stop-color="#fdffb6" />
+      <stop offset="54%" stop-color="#caffbf" />
+      <stop offset="72%" stop-color="#9bf6ff" />
+      <stop offset="100%" stop-color="#bdb2ff" />
+    </linearGradient>
+    <clipPath id="bodyClip">
+      <path d="M 20 64 H 780 V 362 A 18 18 0 0 1 762 380 H 38 A 18 18 0 0 1 20 362 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- subtle drop shadow (visible on light backgrounds; invisible on dark) -->
+  <rect x="24" y="26" width="760" height="360"
+        rx="18" fill="#000000" opacity="0.15" />
+
+  <!-- body fill -->
+  <path d="M 20 64 H 780 V 362 A 18 18 0 0 1 762 380 H 38 A 18 18 0 0 1 20 362 Z" fill="#1a1a2e" />
+
+  <!-- chromatic gradient overlay inside the body (the chromatic tint motif) -->
+  <rect x="20" y="64" width="760" height="316"
+        fill="url(#chromatic)" opacity="0.55" clip-path="url(#bodyClip)" />
+
+  <!-- title bar -->
+  <path d="M 38 20 H 762 A 18 18 0 0 1 780 38 V 64 H 20 V 38 A 18 18 0 0 1 38 20 Z" fill="#2a2a3e" />
+
+  <!-- traffic lights -->
+  <circle cx="42" cy="42.0" r="7" fill="#ff5f57" />
+  <circle cx="64" cy="42.0" r="7" fill="#febc2e" />
+  <circle cx="86" cy="42.0" r="7" fill="#28c840" />
+
+  <!-- title text (per-character rainbow, lolcat-style) -->
+  <text x="400.0" y="48.0" font-size="18"
+        font-family='ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace' text-anchor="middle"
+        letter-spacing="0.5"><tspan fill="#ff8a8a">c</tspan><tspan fill="#ffb066">h</tspan><tspan fill="#ffe066">r</tspan><tspan fill="#a3ff8a">o</tspan><tspan fill="#8affd0">m</tspan><tspan fill="#66d4ff">a</tspan><tspan fill="#8aa3ff">t</tspan><tspan fill="#b08aff">i</tspan><tspan fill="#e08aff">c</tspan><tspan fill="#ff8ad0">l</tspan><tspan fill="#ff8a9b">i</tspan></text>
+
+  <!-- prompt: >_ -->
+  <text x="76" y="226.0" fill="#e4e4e7"
+        font-family='ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace' font-size="96"
+        font-weight="500">&gt;_</text>
+</svg>

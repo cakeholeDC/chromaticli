@@ -1,0 +1,969 @@
+#!/usr/bin/env bash
+# chromaticli — sync terminal colors with VSCode workspace themes.
+# See README.md for usage. Spec: Plan.md §8.
+
+set -euo pipefail
+
+CHROMATICLI_VERSION="0.1.0"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHROMATICLI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli"
+CHROMATICLI_BIN_DIR="$HOME/.local/bin"
+CHROMATICLI_BIN="$CHROMATICLI_BIN_DIR/chromaticli"
+ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
+
+# Install source paths — only valid when running from the repo clone.
+# Used by `install` to copy into ~/.config/chromaticli/ and ~/.local/bin/.
+# Reading-side code paths use $THEMES_JSON instead, which resolves to the
+# installed copy when present.
+THEMES_SRC="$SCRIPT_DIR/themes.json"
+HOOK_SRC="$SCRIPT_DIR/hook.zsh"
+CLI_SRC="$SCRIPT_DIR/chromaticli"
+
+# Runtime themes.json lookup: prefer the installed copy at $CHROMATICLI_CONFIG_DIR
+# (so the binary in ~/.local/bin/ can find it), fall back to the repo copy
+# next to the script (so `./chromaticli list` works in a fresh clone before
+# install has been run).
+if [[ -f "$CHROMATICLI_CONFIG_DIR/themes.json" ]]; then
+  THEMES_JSON="$CHROMATICLI_CONFIG_DIR/themes.json"
+else
+  THEMES_JSON="$THEMES_SRC"
+fi
+
+# Signature comment used by install/uninstall to identify our CLI script.
+# Must appear in the first 2 lines of the script. Keep in sync with the
+# header at the top of this file.
+CHROMATICLI_SIGNATURE="chromaticli — sync terminal colors"
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+err()      { printf 'chromaticli: %s\n' "$*" >&2; }
+die()      { err "$@"; exit 1; }
+# shellcheck disable=SC2016
+die_usage(){ err "$@"; printf '%s\n' 'Run `chromaticli --help` for usage.' >&2; exit 2; }
+
+require_jq() {
+  command -v jq >/dev/null || die "jq is required (brew install jq)"
+}
+
+# Return 0 if the file at $1 has our signature comment in its first two lines.
+# Safe to call on missing files (returns 1). Resolves symlinks via head -n 2
+# (which follows them by default), so a symlink that points at our script
+# also passes the check; the caller decides whether to rm the link or target.
+_chromaticli_is_ours() {
+  local f="$1"
+  [[ -e "$f" ]] || return 1
+  head -n 2 "$f" 2>/dev/null | grep -qF "$CHROMATICLI_SIGNATURE"
+}
+
+# Build the ordered list as tab-separated rows: <N>\t<kind>\t<id>
+# Order: dark-warm themes (alpha) → dark-cool themes (alpha) → light themes (alpha) → pairs (JSON order).
+_build_ordered_list() {
+  jq -r '
+    def bucket_order: ["dark-warm", "dark-cool", "light"];
+    [
+      (bucket_order[] as $cat |
+        .themes | to_entries
+          | map(select(.value.category == $cat))
+          | sort_by(.key)
+          | .[]
+          | {kind: "theme", id: .key}),
+      (.pairs | to_entries[] | {kind: "pair", id: .key})
+    ]
+    | to_entries[]
+    | "\(.key + 1)\t\(.value.kind)\t\(.value.id)"
+  ' "$THEMES_JSON"
+}
+
+_theme_exists() {
+  jq -e --arg t "$1" '.themes[$t]' "$THEMES_JSON" >/dev/null 2>&1
+}
+
+_pair_exists() {
+  jq -e --arg p "$1" '.pairs[$p]' "$THEMES_JSON" >/dev/null 2>&1
+}
+
+# Resolve a positional pick (number or name) → "<kind>\t<id>", or empty.
+_resolve_pick() {
+  local pick="$1"
+  if [[ "$pick" =~ ^[0-9]+$ ]]; then
+    _build_ordered_list | awk -F'\t' -v n="$pick" '$1 == n { printf "%s\t%s", $2, $3; exit }'
+  else
+    if _theme_exists "$pick"; then
+      printf 'theme\t%s' "$pick"
+    elif _pair_exists "$pick"; then
+      printf 'pair\t%s' "$pick"
+    fi
+  fi
+}
+
+# Resolve a number within a specific mode (theme or pair). Alpha passes through.
+_resolve_in_mode() {
+  local mode="$1" val="$2"
+  if [[ "$val" =~ ^[0-9]+$ ]]; then
+    local id
+    id=$(_build_ordered_list | awk -F'\t' -v n="$val" -v k="$mode" '$1==n && $2==k { print $3; exit }')
+    if [[ -z "$id" ]]; then
+      die_usage "number $val is not a valid $mode index"
+    fi
+    printf '%s' "$id"
+  else
+    printf '%s' "$val"
+  fi
+}
+
+# Detect the currently active theme id by reverse-lookup from settings.json.
+# Reads settings at $project_dir (or CWD if not set).
+_detect_active_theme() {
+  local project_dir="${1:-$PWD}"
+  local settings="$project_dir/.vscode/settings.json"
+  [[ -f "$settings" ]] || return 0
+  local active_name
+  active_name=$(jq -r '."workbench.colorTheme" // empty' "$settings" 2>/dev/null) || return 0
+  [[ -n "$active_name" ]] || return 0
+  jq -r --arg n "$active_name" '
+    .themes | to_entries[]
+      | select(.value.vscode.theme_id == $n)
+      | .key
+  ' "$THEMES_JSON"
+}
+
+# Convert "#RRGGBB" → an SGR sequence that paints "  " (two spaces) at that
+# bg color. Empty hex → empty string (caller can suppress that swatch).
+_hex_to_swatch() {
+  local hex="${1#\#}"
+  [[ -z "$hex" ]] && return 0
+  local r g b
+  r=$((16#${hex:0:2}))
+  g=$((16#${hex:2:2}))
+  b=$((16#${hex:4:2}))
+  printf '\033[48;2;%d;%d;%dm  \033[0m' "$r" "$g" "$b"
+}
+
+# Print a theme's palette preview: 4 swatches of the theme's background color
+# (so the user can see "this is what the terminal bg will look like"), then a
+# single uncolored space as a visual gap, then the 16 ANSI palette swatches.
+_print_ansi_strip() {
+  local theme="$1"
+  local strip="" bg_swatch i ansi_hex
+  local bg
+  bg=$(jq -r --arg t "$theme" '.themes[$t].palette.background // empty' "$THEMES_JSON")
+  if [[ -n "$bg" ]]; then
+    bg_swatch=$(_hex_to_swatch "$bg")
+    # 4 bg swatches in a row, then an uncolored space separator
+    strip+="${bg_swatch}${bg_swatch}${bg_swatch}${bg_swatch} "
+  fi
+  for i in {0..15}; do
+    ansi_hex=$(jq -r --arg t "$theme" --argjson i "$i" '.themes[$t].palette.ansi[$i]' "$THEMES_JSON")
+    strip+=$(_hex_to_swatch "$ansi_hex")
+  done
+  printf '%s' "$strip"
+}
+
+# Render a banner for the help screen. Best-effort: tries figlet (slant font)
+# first, falls back to an ASCII-star box. If lolcat is available, pipes the
+# result through it for rainbow coloring. Any failure is silent — the help
+# text underneath is the actual contract; the header is pure flourish.
+_print_header() {
+  local text="chromaticli" base=""
+
+  if command -v figlet >/dev/null 2>&1; then
+    # Get the current terminal width in columns
+    WIDTH=$(tput cols)
+
+    # Choose a font based on the window size
+    if [ "$WIDTH" -gt 60 ]; then
+      base=$(figlet -f slant "$text" 2>/dev/null) || base=""
+    elif [ "$WIDTH" -gt 46 ]; then
+      base=$(figlet -f smslant "$text" 2>/dev/null) || base=""
+    else
+      base=$(figlet -f mini "$text" 2>/dev/null) || base=""
+    fi
+    # Some figlet builds print nothing when font is missing; fall through
+    # to the ASCII box in that case.
+  fi
+
+  if [[ -z "$base" ]]; then
+    local len=${#text}
+    local border
+    border=$(printf '*%.0s' $(seq 1 $((len + 4))))
+    base=$(printf '%s\n* %s *\n%s' "$border" "$text" "$border")
+  fi
+
+  if command -v lolcat >/dev/null 2>&1; then
+    printf '%s\n' "$base" | lolcat 2>/dev/null || printf '%s\n' "$base"
+  else
+    printf '%s\n' "$base"
+  fi
+}
+
+# Emit OSC reset codes to /dev/tty (or stdout if no tty available).
+_emit_reset() {
+  if [[ -t 1 ]]; then
+    for body in 110 111 112 104; do
+      if [[ -n "${TMUX:-}" ]]; then
+        # shellcheck disable=SC1003
+        printf '\ePtmux;\e\033]%s\007\e\\' "$body" > /dev/tty
+      else
+        printf '\033]%s\007' "$body" > /dev/tty
+      fi
+    done
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: help
+# ---------------------------------------------------------------------------
+
+cmd_help() {
+  _print_header
+  cat <<'EOF'
+chromaticli — sync terminal colors with VSCode workspace themes.
+
+Usage:
+  chromaticli <subcommand> [options]
+  chromaticli --help | -h          show this help
+  chromaticli --version | -v       print version
+
+Subcommands:
+  install   [--force]              copy CLI to ~/.local/bin/, hook+themes to ~/.config/chromaticli/,
+                                     append source line to .zshrc
+  uninstall                        remove CLI from ~/.local/bin/ (identity-checked),
+                                     strip source block from .zshrc, reset current tty
+  list                             list themes + pairs with inline color previews
+  set       [<theme|pair|N>]       set the theme for the current (or --project) dir
+            [--pair <id|N>]        explicit pair mode
+            [--theme <id|N>]       explicit single-theme mode
+            [--no-install]         skip VSCode extension auto-install
+            [--project <dir>]      target a directory other than CWD
+  unset     [--project <dir>]      remove theme keys from .vscode/settings.json
+  preview   [<theme|pair|N>]       temporarily apply a theme's colors (no file writes)
+            [--pair <id|N>]        explicit pair mode (uses current Appearance half)
+            [--theme <id|N>]       explicit single-theme mode
+  sync      [--project <dir>]      re-emit OSC colors for current tty (debugging)
+
+See tests/SMOKE_TEST.md for a guided install→use→uninstall walkthrough.
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: version
+# ---------------------------------------------------------------------------
+
+cmd_version() {
+  echo "chromaticli $CHROMATICLI_VERSION"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: list
+# ---------------------------------------------------------------------------
+
+cmd_list() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    cat <<'EOF'
+Usage: chromaticli list
+
+List all available themes and pairs, grouped by category.
+Each theme shows a 16-block true-color inline palette preview.
+The currently active theme for the current directory is marked.
+EOF
+    return 0
+  fi
+
+  require_jq
+
+  local active
+  active=$(_detect_active_theme "$PWD")
+
+  local prev_cat="" pairs_started=0
+  while IFS=$'\t' read -r N KIND ID; do
+    if [[ "$KIND" == "theme" ]]; then
+      local cat
+      cat=$(jq -r --arg t "$ID" '.themes[$t].category' "$THEMES_JSON")
+      if [[ "$cat" != "$prev_cat" ]]; then
+        [[ -n "$prev_cat" ]] && echo ""
+        case "$cat" in
+          dark-warm) echo "── Dark — warm / earthy ──────────────────────────────────────" ;;
+          dark-cool) echo "── Dark — cool / blue ────────────────────────────────────────" ;;
+          light)     echo "── Light ─────────────────────────────────────────────────────" ;;
+        esac
+        echo ""
+        prev_cat="$cat"
+      fi
+      local mark=""
+      [[ "$ID" == "$active" ]] && mark=" (currently active)"
+      local strip
+      strip=$(_print_ansi_strip "$ID")
+      printf "%2d. %-20s %s%s\n" "$N" "$ID" "$strip" "$mark"
+    else
+      if (( pairs_started == 0 )); then
+        echo ""
+        echo "── Pairs (auto light/dark) ───────────────────────────────────"
+        echo ""
+        pairs_started=1
+      fi
+      local light dark
+      light=$(jq -r --arg p "$ID" '.pairs[$p].light' "$THEMES_JSON")
+      dark=$(jq -r --arg p "$ID" '.pairs[$p].dark' "$THEMES_JSON")
+      printf "%2d. %-20s (light: %s ↔ dark: %s)\n" "$N" "$ID" "$light" "$dark"
+    fi
+  done < <(_build_ordered_list)
+  echo ""
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: set
+# ---------------------------------------------------------------------------
+
+cmd_set() {
+  local theme_id="" pair_id="" pick="" no_install=0 project_dir=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h)
+        cat <<'EOF'
+Usage: chromaticli set [<theme|pair|N>] [--pair <id|N>] [--theme <id|N>]
+                       [--no-install] [--project <dir>]
+
+Set the VSCode color theme for the current project (or --project dir).
+With no argument, renders the menu and prompts for a selection.
+
+  --pair <id|N>      explicit light/dark pair mode
+  --theme <id|N>     explicit single-theme mode
+  --no-install       skip `code --install-extension` auto-install
+  --project <dir>    target directory (default: CWD)
+EOF
+        return 0 ;;
+      --pair)      pair_id="$2"; shift 2 ;;
+      --theme)     theme_id="$2"; shift 2 ;;
+      --no-install) no_install=1; shift ;;
+      --project)   project_dir="$2"; shift 2 ;;
+      -*)          die_usage "unknown option '$1' for set" ;;
+      *)
+        if [[ -z "$pick" ]]; then
+          pick="$1"; shift
+        else
+          die_usage "unexpected argument '$1'"
+        fi ;;
+    esac
+  done
+
+  require_jq
+
+  project_dir="${project_dir:-$PWD}"
+  [[ -d "$project_dir" ]] || die "not a directory: $project_dir"
+
+  # No arg → interactive menu
+  if [[ -z "$theme_id" && -z "$pair_id" && -z "$pick" ]]; then
+    cmd_list
+    local choice
+    printf 'Pick (number, theme name, or pair name): '
+    read -r choice
+    if [[ -z "$choice" ]]; then
+      return 0
+    fi
+    pick="$choice"
+  fi
+
+  # Resolve positional pick
+  if [[ -n "$pick" ]]; then
+    local resolved
+    resolved=$(_resolve_pick "$pick")
+    if [[ -z "$resolved" ]]; then
+      die_usage "unknown theme/pair/number: $pick"
+    fi
+    local kind id
+    IFS=$'\t' read -r kind id <<<"$resolved"
+    if [[ "$kind" == "theme" ]]; then
+      theme_id="$id"
+    else
+      pair_id="$id"
+    fi
+  fi
+
+  # Resolve numbers within explicit modes
+  [[ -n "$theme_id" ]] && theme_id=$(_resolve_in_mode theme "$theme_id")
+  [[ -n "$pair_id"  ]] && pair_id=$(_resolve_in_mode pair  "$pair_id")
+
+  # Validate against registry
+  local light="" dark=""
+  if [[ -n "$pair_id" ]]; then
+    light=$(jq -r --arg p "$pair_id" '.pairs[$p].light // empty' "$THEMES_JSON")
+    dark=$(jq -r --arg p "$pair_id" '.pairs[$p].dark // empty' "$THEMES_JSON")
+    [[ -z "$light" || -z "$dark" ]] && die_usage "unknown pair: $pair_id"
+
+    # The hook reads AppleInterfaceStyle to pick light vs dark, which is
+    # macOS-only. On other OSes the hook always emits the light half. Warn
+    # so the user isn't surprised. Single themes work fine cross-platform;
+    # only pair auto-switching is affected.
+    if [[ "$(uname -s)" != "Darwin" ]]; then
+      printf 'chromaticli: note: pair auto-switching currently follows macOS Appearance only — the light theme ("%s") will be applied. Single themes work cross-platform.\n' "$light" >&2
+    fi
+  fi
+  if [[ -n "$theme_id" ]]; then
+    _theme_exists "$theme_id" || die_usage "unknown theme: $theme_id"
+  fi
+
+  mkdir -p "$project_dir/.vscode"
+  local settings="$project_dir/.vscode/settings.json"
+  local ext_file="$project_dir/.vscode/extensions.json"
+  [[ -f "$settings" ]] || echo '{}' > "$settings"
+  [[ -f "$ext_file" ]] || echo '{"recommendations":[]}' > "$ext_file"
+
+  local tmp
+  tmp=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" EXIT
+
+  # --- Merge settings.json ---
+  if [[ -n "$pair_id" ]]; then
+    local l_name d_name
+    l_name=$(jq -r --arg t "$light" '.themes[$t].vscode.theme_id' "$THEMES_JSON")
+    d_name=$(jq -r --arg t "$dark"  '.themes[$t].vscode.theme_id' "$THEMES_JSON")
+    jq --arg l "$l_name" --arg d "$d_name" '
+      . + {
+        "window.autoDetectColorScheme": true,
+        "workbench.preferredLightColorTheme": $l,
+        "workbench.preferredDarkColorTheme":  $d
+      } | del(."workbench.colorTheme")
+    ' "$settings" > "$tmp"
+  else
+    local name
+    name=$(jq -r --arg t "$theme_id" '.themes[$t].vscode.theme_id' "$THEMES_JSON")
+    jq --arg n "$name" '
+      . + {"workbench.colorTheme": $n}
+        | del(."workbench.preferredLightColorTheme",
+              ."workbench.preferredDarkColorTheme",
+              ."window.autoDetectColorScheme")
+    ' "$settings" > "$tmp"
+  fi
+  mv "$tmp" "$settings"
+  tmp=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" EXIT
+
+  # --- Merge extensions.json ---
+  local exts=()
+  if [[ -n "$pair_id" ]]; then
+    for t in "$light" "$dark"; do
+      local e
+      e=$(jq -r --arg t "$t" '.themes[$t].vscode.extension_id // empty' "$THEMES_JSON")
+      [[ -n "$e" ]] && exts+=("$e")
+    done
+  else
+    local e
+    e=$(jq -r --arg t "$theme_id" '.themes[$t].vscode.extension_id // empty' "$THEMES_JSON")
+    [[ -n "$e" ]] && exts+=("$e")
+  fi
+
+  if (( ${#exts[@]} > 0 )); then
+    jq --argjson new "$(printf '%s\n' "${exts[@]}" | jq -R . | jq -s .)" '
+      .recommendations = ((.recommendations // []) + $new | unique)
+    ' "$ext_file" > "$tmp"
+    mv "$tmp" "$ext_file"
+    tmp=$(mktemp)
+    # shellcheck disable=SC2064
+    trap "rm -f '$tmp'" EXIT
+  fi
+
+  echo "wrote $settings"
+
+  # --- Auto-install VSCode extensions ---
+  if (( no_install == 0 )) && command -v code >/dev/null 2>&1 && (( ${#exts[@]} > 0 )); then
+    local installed
+    installed=$(code --list-extensions 2>/dev/null || true)
+    for ext in "${exts[@]}"; do
+      if ! grep -qxiF "$ext" <<<"$installed"; then
+        echo "installing VSCode extension: $ext"
+        code --install-extension "$ext" --force >/dev/null 2>&1 || echo "  (failed to install $ext, continuing)"
+      fi
+    done
+  fi
+
+  # --- Sync current tty ---
+  cmd_sync --project "$project_dir" 2>/dev/null || true
+
+  # --- Nudge if hook not installed ---
+  if ! grep -Fq "# chromaticli" "$ZSHRC" 2>/dev/null; then
+    echo ""
+    echo "Tip: run \`chromaticli install\` to auto-apply themes on cd."
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: unset
+# ---------------------------------------------------------------------------
+
+cmd_unset() {
+  local project_dir=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h)
+        cat <<'EOF'
+Usage: chromaticli unset [--project <dir>]
+
+Remove theme keys from .vscode/settings.json without touching other settings.
+Emits OSC reset codes so the current terminal snaps back to its defaults.
+
+  --project <dir>    target directory (default: CWD)
+EOF
+        return 0 ;;
+      --project) project_dir="$2"; shift 2 ;;
+      *) die_usage "unknown option '$1' for unset" ;;
+    esac
+  done
+
+  require_jq
+
+  project_dir="${project_dir:-$PWD}"
+  local settings="$project_dir/.vscode/settings.json"
+
+  if [[ ! -f "$settings" ]]; then
+    echo "no theme set for this directory"
+    return 0
+  fi
+
+  local tmp
+  tmp=$(mktemp)
+  # shellcheck disable=SC2064
+  trap "rm -f '$tmp'" EXIT
+
+  jq 'del(
+    ."workbench.colorTheme",
+    ."workbench.preferredLightColorTheme",
+    ."workbench.preferredDarkColorTheme",
+    ."window.autoDetectColorScheme"
+  )' "$settings" > "$tmp"
+  mv "$tmp" "$settings"
+
+  echo "cleared theme keys from $settings"
+  _emit_reset
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: preview
+# ---------------------------------------------------------------------------
+
+cmd_preview() {
+  local theme_id="" pair_id="" pick=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h)
+        cat <<'EOF'
+Usage: chromaticli preview [<theme|pair|N>] [--pair <id|N>] [--theme <id|N>]
+
+Temporarily apply a theme's terminal colors without writing settings.json.
+Useful for browsing themes live before committing one with `chromaticli set`.
+
+The preview persists until the next `cd` triggers the hook, or until you
+run `chromaticli set` (commits the choice) or `chromaticli unset` (clears).
+
+  --pair <id|N>      preview the current-Appearance half of a light/dark pair
+  --theme <id|N>     explicit single-theme mode
+
+With no argument, renders the menu and prompts for a selection. Unlike
+`set`, preview always emits OSC (even inside VSCode/Cursor terminals and
+when the target theme matches the currently-active one) — explicit user
+intent overrides both guards.
+EOF
+        return 0 ;;
+      --pair)    pair_id="$2"; shift 2 ;;
+      --theme)   theme_id="$2"; shift 2 ;;
+      -*)        die_usage "unknown option '$1' for preview" ;;
+      *)
+        if [[ -z "$pick" ]]; then
+          pick="$1"; shift
+        else
+          die_usage "unexpected argument '$1'"
+        fi ;;
+    esac
+  done
+
+  require_jq
+
+  # No arg → interactive menu
+  if [[ -z "$theme_id" && -z "$pair_id" && -z "$pick" ]]; then
+    cmd_list
+    local choice
+    printf 'Pick (number, theme name, or pair name) to preview: '
+    read -r choice
+    [[ -z "$choice" ]] && return 0
+    pick="$choice"
+  fi
+
+  # Resolve positional pick
+  if [[ -n "$pick" ]]; then
+    local resolved
+    resolved=$(_resolve_pick "$pick")
+    [[ -z "$resolved" ]] && die_usage "unknown theme/pair/number: $pick"
+    local kind id
+    IFS=$'\t' read -r kind id <<<"$resolved"
+    if [[ "$kind" == "theme" ]]; then
+      theme_id="$id"
+    else
+      pair_id="$id"
+    fi
+  fi
+
+  # Resolve numbers within explicit modes
+  [[ -n "$theme_id" ]] && theme_id=$(_resolve_in_mode theme "$theme_id")
+  [[ -n "$pair_id"  ]] && pair_id=$(_resolve_in_mode pair  "$pair_id")
+
+  # For pairs: pick light or dark half based on current Appearance. On
+  # non-Darwin, fall back to light with the same warning `set --pair` uses
+  # (consistent with Plan.md §9 Q4.11 — macOS-first for pair auto-switching).
+  if [[ -n "$pair_id" ]]; then
+    local light dark
+    light=$(jq -r --arg p "$pair_id" '.pairs[$p].light // empty' "$THEMES_JSON")
+    dark=$(jq -r --arg p "$pair_id" '.pairs[$p].dark // empty' "$THEMES_JSON")
+    [[ -z "$light" || -z "$dark" ]] && die_usage "unknown pair: $pair_id"
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+      if [[ "$(defaults read -g AppleInterfaceStyle 2>/dev/null)" == "Dark" ]]; then
+        theme_id="$dark"
+      else
+        theme_id="$light"
+      fi
+    else
+      printf 'chromaticli: note: pair previews follow macOS Appearance only — showing the light half ("%s").\n' "$light" >&2
+      theme_id="$light"
+    fi
+  fi
+
+  _theme_exists "$theme_id" || die_usage "unknown theme: $theme_id"
+
+  # Emit OSC via the hook's _chromaticli_emit function. Calling it directly
+  # (rather than _chromaticli_apply) bypasses both the IDE guard and the
+  # idempotence guard — exactly what we want for a preview.
+  local hook=""
+  if [[ -f "$CHROMATICLI_CONFIG_DIR/hook.zsh" ]]; then
+    hook="$CHROMATICLI_CONFIG_DIR/hook.zsh"
+  elif [[ -f "$HOOK_SRC" ]]; then
+    hook="$HOOK_SRC"
+  else
+    die "hook.zsh not found — run \`chromaticli install\` first"
+  fi
+
+  zsh -c "source '$hook'; _chromaticli_emit '$theme_id'" 2>/dev/null || true
+
+  echo "previewing $theme_id (no settings.json written)"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: sync
+# ---------------------------------------------------------------------------
+
+cmd_sync() {
+  local project_dir=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h)
+        cat <<'EOF'
+Usage: chromaticli sync [--project <dir>]
+
+Re-emit OSC terminal color codes for the current tty based on the project's
+.vscode/settings.json. Used internally by `set`; also useful for debugging.
+Requires `chromaticli install` to have been run (so hook.zsh is present in
+~/.config/chromaticli/).
+
+  --project <dir>    target directory (default: CWD)
+EOF
+        return 0 ;;
+      --project) project_dir="$2"; shift 2 ;;
+      *) die_usage "unknown option '$1' for sync" ;;
+    esac
+  done
+
+  project_dir="${project_dir:-$PWD}"
+
+  # Prefer the installed hook; fall back to the hook next to this script.
+  local hook=""
+  if [[ -f "$CHROMATICLI_CONFIG_DIR/hook.zsh" ]]; then
+    hook="$CHROMATICLI_CONFIG_DIR/hook.zsh"
+  elif [[ -f "$HOOK_SRC" ]]; then
+    hook="$HOOK_SRC"
+  else
+    err "hook.zsh not found — run \`chromaticli install\` first"
+    return 1
+  fi
+
+  # Bypass the hook's idempotence guard: explicit `chromaticli set/sync` is the
+  # user asking for a visible result. The guard is the right behavior for chpwd
+  # (prevents per-cd flicker) but the wrong behavior here. Unsetting
+  # _CHROMATICLI_ACTIVE in the subshell forces the guard to fire and re-emit;
+  # the parent shell's exported value is unaffected (subshell-only mutation).
+  zsh -c "unset _CHROMATICLI_ACTIVE; source '$hook'; cd -- '$project_dir'; _chromaticli_apply" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: install
+# ---------------------------------------------------------------------------
+
+cmd_install() {
+  local force=0
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --help|-h)
+        cat <<'EOF'
+Usage: chromaticli install [--force]
+
+Install chromaticli:
+  - copies the CLI to ~/.local/bin/chromaticli (so it's on $PATH)
+  - copies hook.zsh + themes.json to ~/.config/chromaticli/
+    (or $XDG_CONFIG_HOME/chromaticli/)
+  - appends a source line to ~/.zshrc
+
+Idempotent — safe to re-run. Use --force to overwrite existing files.
+
+If ~/.local/bin is not already on $PATH, a one-line advisory is printed.
+The installer never auto-edits $PATH.
+EOF
+        return 0 ;;
+      --force) force=1; shift ;;
+      *) die_usage "unknown option '$1' for install" ;;
+    esac
+  done
+
+  # jq is required for the hook to function
+  command -v jq >/dev/null || die "jq is required (brew install jq)"
+
+  # Guard: `install` can't run from the installed binary at ~/.local/bin/chromaticli
+  # because the source files (hook.zsh, themes.json, repo CLI) don't live there.
+  # User must run `./chromaticli install` from the repo clone.
+  if [[ "$SCRIPT_DIR" == "$CHROMATICLI_BIN_DIR" ]]; then
+    err "cannot run \`install\` from the installed binary at $CHROMATICLI_BIN."
+    err "There are no source files to install from here."
+    err "Run \`./chromaticli install\` from the repo clone instead (e.g. ~/dev/chromaticli)."
+    exit 1
+  fi
+
+  # Validate source files exist in the repo
+  [[ -f "$HOOK_SRC" ]]    || die "hook.zsh not found at $HOOK_SRC"
+  [[ -f "$THEMES_SRC" ]]  || die "themes.json not found at $THEMES_SRC"
+  [[ -f "$CLI_SRC" ]]     || die "chromaticli CLI not found at $CLI_SRC"
+
+  # Create config dir
+  mkdir -p "$CHROMATICLI_CONFIG_DIR"
+
+  # Copy config files
+  if [[ ! -f "$CHROMATICLI_CONFIG_DIR/hook.zsh" || "$force" == "1" ]]; then
+    cp "$HOOK_SRC" "$CHROMATICLI_CONFIG_DIR/hook.zsh"
+    echo "installed: $CHROMATICLI_CONFIG_DIR/hook.zsh"
+  else
+    echo "already present: $CHROMATICLI_CONFIG_DIR/hook.zsh (use --force to overwrite)"
+  fi
+
+  if [[ ! -f "$CHROMATICLI_CONFIG_DIR/themes.json" || "$force" == "1" ]]; then
+    cp "$THEMES_SRC" "$CHROMATICLI_CONFIG_DIR/themes.json"
+    echo "installed: $CHROMATICLI_CONFIG_DIR/themes.json"
+  else
+    echo "already present: $CHROMATICLI_CONFIG_DIR/themes.json (use --force to overwrite)"
+  fi
+
+  # Copy the CLI binary itself to ~/.local/bin/chromaticli.
+  # Identity-check any existing file at that path: refuse to clobber an
+  # unrelated tool that happens to share the name (even with --force).
+  mkdir -p "$CHROMATICLI_BIN_DIR"
+  if [[ -e "$CHROMATICLI_BIN" ]]; then
+    if _chromaticli_is_ours "$CHROMATICLI_BIN"; then
+      if [[ "$force" == "1" ]]; then
+        cp "$CLI_SRC" "$CHROMATICLI_BIN"
+        chmod +x "$CHROMATICLI_BIN"
+        echo "installed: $CHROMATICLI_BIN (overwritten)"
+      else
+        echo "already present: $CHROMATICLI_BIN (use --force to overwrite)"
+      fi
+    else
+      die "refusing to overwrite $CHROMATICLI_BIN: file exists but does not look like chromaticli (signature comment missing). Remove it manually and re-run."
+    fi
+  else
+    cp "$CLI_SRC" "$CHROMATICLI_BIN"
+    chmod +x "$CHROMATICLI_BIN"
+    echo "installed: $CHROMATICLI_BIN"
+  fi
+
+  # Append source block to .zshrc (idempotent via marker)
+  mkdir -p "$(dirname "$ZSHRC")"
+  touch "$ZSHRC"
+
+  if grep -Fq "# chromaticli" "$ZSHRC" 2>/dev/null; then
+    if [[ "$force" == "1" ]]; then
+      # Remove existing block and re-add below
+      local tmp
+      tmp=$(mktemp)
+      local marker_line next_line
+      marker_line=$(grep -n "# chromaticli" "$ZSHRC" | head -1 | cut -d: -f1)
+      next_line=$((marker_line + 1))
+      # Strip blank line before marker if present
+      local prev_line=$((marker_line - 1))
+      local start_line="$marker_line"
+      if (( prev_line > 0 )); then
+        local prev_content
+        prev_content=$(sed -n "${prev_line}p" "$ZSHRC")
+        [[ -z "$prev_content" ]] && start_line="$prev_line"
+      fi
+      sed "${start_line},${next_line}d" "$ZSHRC" > "$tmp"
+      mv "$tmp" "$ZSHRC"
+      cat >> "$ZSHRC" <<EOF
+
+# chromaticli — auto-pair terminal colors to .vscode/settings.json
+source "$CHROMATICLI_CONFIG_DIR/hook.zsh"
+EOF
+      echo "appended source block to $ZSHRC"
+    else
+      echo "already installed in $ZSHRC (use --force to update)"
+    fi
+  else
+    cat >> "$ZSHRC" <<EOF
+
+# chromaticli — auto-pair terminal colors to .vscode/settings.json
+source "$CHROMATICLI_CONFIG_DIR/hook.zsh"
+EOF
+    echo "appended source block to $ZSHRC"
+  fi
+
+  _print_path_advisory
+  _print_new_shell_hint
+}
+
+# Print a warning if ~/.local/bin is not on $PATH. Never edits $PATH itself —
+# the user decides whether to add it. Modeled on pipx / uv / rustup behavior.
+_print_path_advisory() {
+  case ":$PATH:" in
+    *":$CHROMATICLI_BIN_DIR:"*) return 0 ;;
+  esac
+  echo ""
+  echo "NOTE: $CHROMATICLI_BIN_DIR is not on your \$PATH."
+  echo "To use \`chromaticli\` from any directory, add this line to your ~/.zshrc:"
+  echo ""
+  echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+}
+
+_print_new_shell_hint() {
+  echo ""
+  echo "Open a new shell or run:  exec zsh"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: uninstall
+# ---------------------------------------------------------------------------
+
+cmd_uninstall() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    cat <<EOF
+Usage: chromaticli uninstall
+
+Reverse a previous \`chromaticli install\`:
+  - remove ~/.local/bin/chromaticli (only if signature matches)
+  - remove $CHROMATICLI_CONFIG_DIR (hook.zsh + themes.json)
+  - strip the # chromaticli source block from ~/.zshrc (backup .zshrc.chromaticli.bak)
+  - reset the current terminal's colors to its profile defaults
+
+Idempotent — re-running after a clean uninstall is a no-op.
+
+Project .vscode/ files are left alone (harmless without the hook; the user
+authored them per-project and we don't own them).
+EOF
+    return 0
+  fi
+
+  # --- Step 1: remove ~/.local/bin/chromaticli (identity-checked) ---
+  # Use -L so we treat symlinks as files (we check the resolved target's
+  # signature and then `rm` the link itself, never the target).
+  if [[ -L "$CHROMATICLI_BIN" || -f "$CHROMATICLI_BIN" ]]; then
+    if _chromaticli_is_ours "$CHROMATICLI_BIN"; then
+      rm -f "$CHROMATICLI_BIN"
+      echo "removed: $CHROMATICLI_BIN"
+    else
+      err "refusing to remove $CHROMATICLI_BIN: file exists but does not look like chromaticli (signature comment missing). Inspect and remove manually if intended."
+    fi
+  else
+    echo "not present: $CHROMATICLI_BIN (skipped)"
+  fi
+
+  # --- Step 2: remove the config dir ---
+  # chromaticli's curation model puts nothing user-authored here: hook.zsh and
+  # themes.json are verbatim copies of the repo. Wiping the dir is symmetric
+  # with install creating it. See Plan.md §9 Q4.8.
+  if [[ -d "$CHROMATICLI_CONFIG_DIR" ]]; then
+    rm -rf "$CHROMATICLI_CONFIG_DIR"
+    echo "removed: $CHROMATICLI_CONFIG_DIR"
+  else
+    echo "not present: $CHROMATICLI_CONFIG_DIR (skipped)"
+  fi
+
+  # --- Step 3: strip the .zshrc source block ---
+  if [[ ! -f "$ZSHRC" ]]; then
+    echo "no .zshrc found — nothing else to remove."
+    return 0
+  fi
+
+  local marker_line
+  marker_line=$(grep -nF "# chromaticli" "$ZSHRC" 2>/dev/null | head -1 | cut -d: -f1 || true)
+
+  if [[ -z "$marker_line" ]]; then
+    echo "chromaticli hook is not installed in $ZSHRC — nothing to remove."
+  else
+    local next_line=$(( marker_line + 1 ))
+
+    # Defensive check: line after marker must look like a `source` line
+    local src_line
+    src_line=$(sed -n "${next_line}p" "$ZSHRC")
+    if ! [[ "$src_line" =~ ^[[:space:]]*source ]]; then
+      err "refusing to edit $ZSHRC: line after '# chromaticli' doesn't look like a 'source ...' line."
+      err "got: $src_line"
+      err "Inspect $ZSHRC and remove the chromaticli block manually."
+      exit 1
+    fi
+
+    # Include the preceding blank line if present (install always writes one)
+    local prev_line=$(( marker_line - 1 ))
+    local start_line="$marker_line"
+    if (( prev_line > 0 )); then
+      local prev_content
+      prev_content=$(sed -n "${prev_line}p" "$ZSHRC")
+      [[ -z "$prev_content" ]] && start_line="$prev_line"
+    fi
+    local end_line="$next_line"
+
+    # Backup before editing
+    local backup="$ZSHRC.chromaticli.bak"
+    cp "$ZSHRC" "$backup"
+
+    sed -i.tmp "${start_line},${end_line}d" "$ZSHRC"
+    rm -f "$ZSHRC.tmp"
+
+    echo "removed chromaticli block from $ZSHRC (lines ${start_line}–${end_line})"
+    echo "backup saved to $backup"
+  fi
+
+  # --- Step 4: reset current tty ---
+  _emit_reset
+  echo ""
+  echo "Current terminal repainted to profile defaults."
+  echo ""
+  echo "Project .vscode/ files were left alone (the hook is gone, so they're"
+  echo "inert in any new shell — VSCode still reads them as normal)."
+}
+
+# ---------------------------------------------------------------------------
+# Top-level dispatch
+# ---------------------------------------------------------------------------
+
+case "${1:-}" in
+  ''|-h|--help)   cmd_help ;;
+  -v|--version)   cmd_version ;;
+  list)     shift; cmd_list    "$@" ;;
+  set)      shift; cmd_set     "$@" ;;
+  unset)    shift; cmd_unset   "$@" ;;
+  preview)  shift; cmd_preview "$@" ;;
+  sync)     shift; cmd_sync    "$@" ;;
+  install)  shift; cmd_install "$@" ;;
+  uninstall) shift; cmd_uninstall "$@" ;;
+  *) die_usage "unknown subcommand '${1}'" ;;
+esac

@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y shellcheck jq
+
+      - name: shellcheck — chromaticli (bash)
+        run: shellcheck chromaticli
+
+      - name: shellcheck — hook.zsh (zsh, treated as bash for lint)
+        # zsh is not a supported shellcheck shell; -s bash with inline
+        # disable directives for zsh-specific syntax (see hook.zsh header).
+        run: shellcheck -s bash hook.zsh
+
+  previews-up-to-date:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Regenerate previews
+        # Re-runs the generator against the committed themes.json. Pure
+        # stdlib Python 3 — no pip install needed.
+        run: python3 scripts/generate-preview.py
+
+      - name: Lint — preview artifacts must match themes.json
+        # If any preview file would differ, the diff exit code is nonzero
+        # and CI fails with the diff inline. Fix locally by re-running the
+        # generator and committing the regenerated artifacts.
+        run: git diff --exit-code docs/themes/ docs/theme_preview.html docs/theme_preview.md
+
+  verify-themes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify themes against VSCode marketplace
+        # Queries the live marketplace for every non-built-in extension and
+        # confirms the theme_id matches one of the labels the extension
+        # actually contributes. Built-in themes are checked against a
+        # hard-coded list in the script. Network required; ~15s for 12 themes.
+        # Exits 1 on any mismatch — typo, removed extension, drifted label.
+        run: python3 scripts/verify-themes.py
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y jq
+
+      - name: Validate themes.json schema
+        # Fast JSON-syntax check. Catches malformed themes.json before any
+        # downstream script (generate-preview.py, verify-themes.py, the CLI
+        # itself) chokes on it with a less-readable traceback.
+        run: jq -e . themes.json > /dev/null
+
+      - name: Non-TTY smoke checks
+        # Exercises the CLI's runtime behavior in ways that don't need a real
+        # terminal: help/version, `list` output, `set/unset --no-install`
+        # settings.json writes, exit codes for bad input. The hook + OSC
+        # emission belong in tests/SMOKE_TEST.md (the interactive walkthrough).
+        run: ./tests/smoke.sh

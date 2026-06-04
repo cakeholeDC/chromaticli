@@ -1,0 +1,141 @@
+{
+  "_comment": "Theme registry for chromaticli. Each `.themes.<id>` maps a chromaticli internal id to a VSCode theme (display name + extension) and a 16-color terminal palette. Palette values should match the upstream theme's canonical iTerm2 port — never hand-tune; the goal is fidelity to the editor experience. Palettes are emitted via standard OSC codes (OSC 4/10/11/12) so they apply uniformly across iTerm2, Terminal.app, Alacritty, Kitty, and any modern terminal. Editing workflow: after any change under `.themes` or `.pairs`, run (1) `python3 scripts/verify-themes.py` to confirm every `vscode.theme_id` resolves against the live VSCode marketplace or matches a known built-in, then (2) `python3 scripts/generate-preview.py` to refresh `docs/themes/*.svg`, `docs/theme_preview.html`, and `docs/theme_preview.md`. Commit themes.json and the regenerated artifacts together. CI runs both as separate jobs.",
+  "themes": {
+    "abyss": {
+      "category": "dark-cool",
+      "vscode": { "theme_id": "Abyss", "extension_id": null },
+      "palette": {
+        "background": "#000c18", "foreground": "#6688cc", "cursor": "#ddbb88",
+        "ansi": [
+          "#111111", "#ff9da4", "#d1f1a9", "#ffeead", "#bbdaff", "#ebbbff", "#99ffff", "#cccccc",
+          "#333333", "#ff7882", "#b8f171", "#ffe580", "#80baff", "#d778ff", "#78ffff", "#ffffff"
+        ]
+      }
+    },
+    "dark-modern": {
+      "category": "dark-cool",
+      "vscode": { "theme_id": "Default Dark Modern", "extension_id": null },
+      "palette": {
+        "background": "#1f1f1f", "foreground": "#cccccc", "cursor": "#cccccc",
+        "ansi": [
+          "#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
+          "#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+        ]
+      }
+    },
+    "dark-pink": {
+      "category": "dark-cool",
+      "vscode": { "theme_id": "Dark Pink", "extension_id": "fralyx.dark-pink" },
+      "palette": {
+        "background": "#1d0116", "foreground": "#ffcccc", "cursor": "#661f40",
+        "ansi": [
+          "#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
+          "#666666", "#f14c4c", "#23d18b", "#ff8800", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+        ]
+      }
+    },
+    "grass": {
+      "category": "dark-warm",
+      "vscode": { "theme_id": "Green Abyss", "extension_id": "mureni.green-abyss" },
+      "palette": {
+        "background": "#13773d", "foreground": "#fff0a5", "cursor": "#8c2800",
+        "ansi": [
+          "#000000", "#bb0000", "#00bb00", "#e7b000", "#0000a3", "#950062", "#00bbbb", "#bbbbbb",
+          "#555555", "#bb0000", "#00bb00", "#e7b000", "#0000bb", "#ff55ff", "#55ffff", "#ffffff"
+        ]
+      }
+    },
+    "kimbie-dark": {
+      "category": "dark-warm",
+      "vscode": { "theme_id": "Kimbie Dark", "extension_id": null },
+      "palette": {
+        "background": "#221a0f", "foreground": "#d3af86", "cursor": "#d3af86",
+        "ansi": [
+          "#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
+          "#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+        ]
+      }
+    },
+    "light-modern": {
+      "category": "light",
+      "vscode": { "theme_id": "Default Light Modern", "extension_id": null },
+      "palette": {
+        "background": "#ffffff", "foreground": "#3b3b3b", "cursor": "#005fb8",
+        "ansi": [
+          "#000000", "#cd3131", "#00bc00", "#949800", "#0451a5", "#bc05bc", "#0598bc", "#555555",
+          "#666666", "#cd3131", "#14ce14", "#b5ba00", "#0451a5", "#bc05bc", "#0598bc", "#a5a5a5"
+        ]
+      }
+    },
+    "monokai": {
+      "category": "dark-warm",
+      "vscode": { "theme_id": "Monokai", "extension_id": null },
+      "palette": {
+        "background": "#272822", "foreground": "#f8f8f2", "cursor": "#f8f8f0",
+        "ansi": [
+          "#333333", "#c4265e", "#86b42b", "#b3b42b", "#6a7ec8", "#8c6bc8", "#56adbc", "#e3e3dd",
+          "#666666", "#f92672", "#a6e22e", "#e2e22e", "#819aff", "#ae81ff", "#66d9ef", "#f8f8f2"
+        ]
+      }
+    },
+    "ocean": {
+      "category": "dark-cool",
+      "vscode": { "theme_id": "Tomorrow Night Blue", "extension_id": null },
+      "palette": {
+        "background": "#224fbc", "foreground": "#ffffff", "cursor": "#7f7f7f",
+        "ansi": [
+          "#000000", "#990000", "#00a600", "#999900", "#0000b2", "#b200b2", "#00a6b2", "#bfbfbf",
+          "#666666", "#e50000", "#00d900", "#e5e500", "#0000ff", "#e500e5", "#00e5e5", "#e5e5e5"
+        ]
+      }
+    },
+    "purple-rain": {
+      "category": "dark-cool",
+      "vscode": { "theme_id": "Functional Purple", "extension_id": "JoshDavies.functional-programming" },
+      "palette": {
+        "background": "#21084a", "foreground": "#fffbf6", "cursor": "#ff271d",
+        "ansi": [
+          "#000000", "#ff260e", "#9be205", "#ffc400", "#00a2fa", "#815bb5", "#00deef", "#ffffff",
+          "#565656", "#ff4250", "#b8e36e", "#ffd852", "#00a6ff", "#ac7bf0", "#74fdf3", "#ffffff"
+        ]
+      }
+    },
+    "red-sands": {
+      "category": "dark-warm",
+      "vscode": { "theme_id": "Red", "extension_id": null },
+      "palette": {
+        "background": "#7a251e", "foreground": "#d7c9a7", "cursor": "#ffffff",
+        "ansi": [
+          "#000000", "#ff3f00", "#00bb00", "#e7b000", "#0072ff", "#bb00bb", "#00bbbb", "#bbbbbb",
+          "#555555", "#bb0000", "#00bb00", "#e7b000", "#0072ae", "#ff55ff", "#55ffff", "#ffffff"
+        ]
+      }
+    },
+    "solarized-dark": {
+      "category": "dark-cool",
+      "vscode": { "theme_id": "Solarized Dark", "extension_id": null },
+      "palette": {
+        "background": "#002b36", "foreground": "#839496", "cursor": "#839496",
+        "ansi": [
+          "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
+          "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3"
+        ]
+      }
+    },
+    "solarized-light": {
+      "category": "light",
+      "vscode": { "theme_id": "Solarized Light", "extension_id": null },
+      "palette": {
+        "background": "#fdf6e3", "foreground": "#657b83", "cursor": "#657b83",
+        "ansi": [
+          "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
+          "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3"
+        ]
+      }
+    }
+  },
+  "pairs": {
+    "default": { "light": "light-modern", "dark": "dark-modern" },
+    "solarized": { "light": "solarized-light", "dark": "solarized-dark" }
+  }
+}
