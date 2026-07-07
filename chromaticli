@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # chromaticli — sync terminal colors with VSCode workspace themes.
-# See README.md for usage. Spec: Plan.md §8.
+# See README.md for usage. Spec: shell-expansion-plan.md.
 
 set -euo pipefail
 
@@ -10,13 +10,18 @@ CHROMATICLI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli"
 CHROMATICLI_BIN_DIR="$HOME/.local/bin"
 CHROMATICLI_BIN="$CHROMATICLI_BIN_DIR/chromaticli"
 ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
+BASH_PROFILE="$HOME/.bash_profile"
+FISH_CONF_D="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
+FISH_SHIM="$FISH_CONF_D/chromaticli.fish"
 
 # Install source paths — only valid when running from the repo clone.
 # Used by `install` to copy into ~/.config/chromaticli/ and ~/.local/bin/.
 # Reading-side code paths use $THEMES_JSON instead, which resolves to the
 # installed copy when present.
 THEMES_SRC="$SCRIPT_DIR/themes.json"
-HOOK_SRC="$SCRIPT_DIR/hook.zsh"
+HOOK_ZSH_SRC="$SCRIPT_DIR/hook.zsh"
+HOOK_BASH_SRC="$SCRIPT_DIR/hook.bash"
+HOOK_FISH_SRC="$SCRIPT_DIR/hook.fish"
 CLI_SRC="$SCRIPT_DIR/chromaticli"
 
 # Runtime themes.json lookup: prefer the installed copy at $CHROMATICLI_CONFIG_DIR
@@ -117,8 +122,15 @@ _resolve_in_mode() {
 # Reads settings at $project_dir (or CWD if not set).
 _detect_active_theme() {
   local project_dir="${1:-$PWD}"
-  local settings="$project_dir/.vscode/settings.json"
-  [[ -f "$settings" ]] || return 0
+  local settings="" dir="$project_dir"
+  while [[ "$dir" != "/" && -n "$dir" ]]; do
+    if [[ -f "$dir/.vscode/settings.json" ]]; then
+      settings="$dir/.vscode/settings.json"
+      break
+    fi
+    dir="$(dirname "$dir")"
+  done
+  [[ -n "$settings" ]] || return 0
   local active_name
   active_name=$(jq -r '."workbench.colorTheme" // empty' "$settings" 2>/dev/null) || return 0
   [[ -n "$active_name" ]] || return 0
@@ -141,24 +153,55 @@ _hex_to_swatch() {
   printf '\033[48;2;%d;%d;%dm  \033[0m' "$r" "$g" "$b"
 }
 
-# Print a theme's palette preview: 4 swatches of the theme's background color
-# (so the user can see "this is what the terminal bg will look like"), then a
-# single uncolored space as a visual gap, then the 16 ANSI palette swatches.
 _print_ansi_strip() {
-  local theme="$1"
-  local strip="" bg_swatch i ansi_hex
-  local bg
-  bg=$(jq -r --arg t "$theme" '.themes[$t].palette.background // empty' "$THEMES_JSON")
-  if [[ -n "$bg" ]]; then
-    bg_swatch=$(_hex_to_swatch "$bg")
-    # 4 bg swatches in a row, then an uncolored space separator
-    strip+="${bg_swatch}${bg_swatch}${bg_swatch}${bg_swatch} "
-  fi
-  for i in {0..15}; do
-    ansi_hex=$(jq -r --arg t "$theme" --argjson i "$i" '.themes[$t].palette.ansi[$i]' "$THEMES_JSON")
-    strip+=$(_hex_to_swatch "$ansi_hex")
+  local theme_id="$1"
+  local bg ansi i
+  bg=$(jq -r --arg t "$theme_id" '.themes[$t].palette.background' "$THEMES_JSON")
+  for _ in 1 2 3 4; do
+    _hex_to_swatch "$bg"
   done
-  printf '%s' "$strip"
+  printf ' '
+  for i in {0..15}; do
+    ansi=$(jq -r --arg t "$theme_id" --argjson i "$i" '.themes[$t].palette.ansi[$i] // empty' "$THEMES_JSON")
+    _hex_to_swatch "$ansi"
+  done
+}
+
+# Detect the shell to configure from $SHELL, normalizing to a supported name.
+# Returns "zsh", "bash", or "fish". Falls back to "zsh".
+_detect_shell() {
+  local s
+  s="$(basename "${SHELL:-zsh}")"
+  case "$s" in
+    zsh|bash|fish) printf '%s' "$s" ;;
+    *) printf 'zsh' ;;
+  esac
+}
+
+# Return the hook file path for the currently active shell (from $SHELL).
+# Used by preview and sync to spawn the correct subshell.
+_active_hook() {
+  local s
+  s="$(basename "${SHELL:-zsh}")"
+  case "$s" in
+    bash) printf '%s' "$CHROMATICLI_CONFIG_DIR/hook.bash" ;;
+    fish) printf '%s' "$CHROMATICLI_CONFIG_DIR/hook.fish" ;;
+    *)    printf '%s' "$CHROMATICLI_CONFIG_DIR/hook.zsh"  ;;
+  esac
+}
+
+# Return true (0) if the chromaticli hook is wired into any supported shell's rc.
+# Design note: zsh and bash checks require the "# chromaticli" marker; fish uses
+# file existence only. This asymmetry is intentional — _install_rc_fish refuses to
+# write any file that lacks the marker, so a file at $FISH_SHIM was either written
+# by chromaticli or is an anomaly the user must resolve manually. If you prefer
+# full symmetry, change the fish check to:
+#   grep -Fq "# chromaticli" "$FISH_SHIM" 2>/dev/null && return 0
+_hook_is_installed_anywhere() {
+  grep -Fq "# chromaticli" "$ZSHRC"        2>/dev/null && return 0
+  grep -Fq "# chromaticli" "$BASH_PROFILE" 2>/dev/null && return 0
+  [[ -f "$FISH_SHIM" ]]                               && return 0
+  return 1
 }
 
 # Render a banner for the help screen. Best-effort: tries figlet (slant font)
@@ -227,10 +270,11 @@ Usage:
   chromaticli --version | -v       print version
 
 Subcommands:
-  install   [--force]              copy CLI to ~/.local/bin/, hook+themes to ~/.config/chromaticli/,
-                                     append source line to .zshrc
+  install   [--force]              copy CLI to ~/.local/bin/, hooks+themes to ~/.config/chromaticli/,
+            [--shell <zsh|bash|fish>]  wire hook into shell rc (default: auto-detect from $SHELL)
+            [--all-shells]         wire hook into every supported shell found on this system
   uninstall                        remove CLI from ~/.local/bin/ (identity-checked),
-                                     strip source block from .zshrc, reset current tty
+                                     strip hook from all configured shells, reset current tty
   list                             list themes + pairs with inline color previews
   set       [<theme|pair|N>]       set the theme for the current (or --project) dir
             [--pair <id|N>]        explicit pair mode
@@ -238,11 +282,12 @@ Subcommands:
             [--no-install]         skip VSCode extension auto-install
             [--project <dir>]      target a directory other than CWD
   unset     [--project <dir>]      remove theme keys from .vscode/settings.json
-  preview   [<theme|pair|N>]       temporarily apply a theme's colors (no file writes)
+  preview   [<theme|pair|N>]       temporarily apply a theme's colors (requires install; no file writes)
             [--pair <id|N>]        explicit pair mode (uses current Appearance half)
             [--theme <id|N>]       explicit single-theme mode
-  sync      [--project <dir>]      re-emit OSC colors for current tty (debugging)
+  sync      [--project <dir>]      re-apply the theme for <dir> (or $PWD) using the active shell's hook
 
+Every subcommand supports --help.
 See tests/SMOKE_TEST.md for a guided install→use→uninstall walkthrough.
 EOF
 }
@@ -439,9 +484,6 @@ EOF
     ' "$settings" > "$tmp"
   fi
   mv "$tmp" "$settings"
-  tmp=$(mktemp)
-  # shellcheck disable=SC2064
-  trap "rm -f '$tmp'" EXIT
 
   # --- Merge extensions.json ---
   local exts=()
@@ -462,9 +504,6 @@ EOF
       .recommendations = ((.recommendations // []) + $new | unique)
     ' "$ext_file" > "$tmp"
     mv "$tmp" "$ext_file"
-    tmp=$(mktemp)
-    # shellcheck disable=SC2064
-    trap "rm -f '$tmp'" EXIT
   fi
 
   echo "wrote $settings"
@@ -484,8 +523,8 @@ EOF
   # --- Sync current tty ---
   cmd_sync --project "$project_dir" 2>/dev/null || true
 
-  # --- Nudge if hook not installed ---
-  if ! grep -Fq "# chromaticli" "$ZSHRC" 2>/dev/null; then
+  # --- Nudge if hook not installed in any shell ---
+  if ! _hook_is_installed_anywhere; then
     echo ""
     echo "Tip: run \`chromaticli install\` to auto-apply themes on cd."
   fi
@@ -557,6 +596,7 @@ Usage: chromaticli preview [<theme|pair|N>] [--pair <id|N>] [--theme <id|N>]
 
 Temporarily apply a theme's terminal colors without writing settings.json.
 Useful for browsing themes live before committing one with `chromaticli set`.
+Requires `chromaticli install` to have been run for the shell selected by $SHELL.
 
 The preview persists until the next `cd` triggers the hook, or until you
 run `chromaticli set` (commits the choice) or `chromaticli unset` (clears).
@@ -614,7 +654,7 @@ EOF
 
   # For pairs: pick light or dark half based on current Appearance. On
   # non-Darwin, fall back to light with the same warning `set --pair` uses
-  # (consistent with Plan.md §9 Q4.11 — macOS-first for pair auto-switching).
+  # (consistent with shell-expansion-plan.md — macOS-first for pair auto-switching).
   if [[ -n "$pair_id" ]]; then
     local light dark
     light=$(jq -r --arg p "$pair_id" '.pairs[$p].light // empty' "$THEMES_JSON")
@@ -639,15 +679,23 @@ EOF
   # (rather than _chromaticli_apply) bypasses both the IDE guard and the
   # idempotence guard — exactly what we want for a preview.
   local hook=""
-  if [[ -f "$CHROMATICLI_CONFIG_DIR/hook.zsh" ]]; then
-    hook="$CHROMATICLI_CONFIG_DIR/hook.zsh"
-  elif [[ -f "$HOOK_SRC" ]]; then
-    hook="$HOOK_SRC"
+  local preferred
+  preferred=$(_active_hook)
+  if [[ -f "$preferred" ]]; then
+    hook="$preferred"
   else
-    die "hook.zsh not found — run \`chromaticli install\` first"
+    die "no hook found for shell '$(basename "${SHELL:-zsh}")' — run \`chromaticli install\` first"
   fi
 
-  zsh -c "source '$hook'; _chromaticli_emit '$theme_id'" 2>/dev/null || true
+  # ponytail: paths with single quotes break the -c string. Acceptable edge case;
+  # upgrade path: switch to printf '%q' escaping if ever reported.
+  local shell_name
+  shell_name="$(basename "${SHELL:-zsh}")"
+  case "$shell_name" in
+    fish) fish -c "source '$hook'; _chromaticli_emit '$theme_id'" 2>/dev/null || true ;;
+    bash) bash -c "source '$hook'; _chromaticli_emit '$theme_id'" 2>/dev/null || true ;;
+    *)    zsh  -c "source '$hook'; _chromaticli_emit '$theme_id'" 2>/dev/null || true ;;
+  esac
 
   echo "previewing $theme_id (no settings.json written)"
 }
@@ -667,8 +715,7 @@ Usage: chromaticli sync [--project <dir>]
 
 Re-emit OSC terminal color codes for the current tty based on the project's
 .vscode/settings.json. Used internally by `set`; also useful for debugging.
-Requires `chromaticli install` to have been run (so hook.zsh is present in
-~/.config/chromaticli/).
+Requires `chromaticli install` to have been run for the shell selected by $SHELL.
 
   --project <dir>    target directory (default: CWD)
 EOF
@@ -680,14 +727,13 @@ EOF
 
   project_dir="${project_dir:-$PWD}"
 
-  # Prefer the installed hook; fall back to the hook next to this script.
   local hook=""
-  if [[ -f "$CHROMATICLI_CONFIG_DIR/hook.zsh" ]]; then
-    hook="$CHROMATICLI_CONFIG_DIR/hook.zsh"
-  elif [[ -f "$HOOK_SRC" ]]; then
-    hook="$HOOK_SRC"
+  local preferred
+  preferred=$(_active_hook)
+  if [[ -f "$preferred" ]]; then
+    hook="$preferred"
   else
-    err "hook.zsh not found — run \`chromaticli install\` first"
+    err "no hook found for shell '$(basename "${SHELL:-zsh}")' — run \`chromaticli install\` first"
     return 1
   fi
 
@@ -696,7 +742,15 @@ EOF
   # (prevents per-cd flicker) but the wrong behavior here. Unsetting
   # _CHROMATICLI_ACTIVE in the subshell forces the guard to fire and re-emit;
   # the parent shell's exported value is unaffected (subshell-only mutation).
-  zsh -c "unset _CHROMATICLI_ACTIVE; source '$hook'; cd -- '$project_dir'; _chromaticli_apply" 2>/dev/null || true
+  # ponytail: paths with single quotes break the -c string. Acceptable edge case;
+  # upgrade path: switch to printf '%q' escaping if ever reported.
+  local shell_name
+  shell_name="$(basename "${SHELL:-zsh}")"
+  case "$shell_name" in
+    bash) bash -c "unset _CHROMATICLI_ACTIVE; source '$hook'; cd -- '$project_dir'; _chromaticli_apply" 2>/dev/null || true ;;
+    fish) fish -c "set -e _CHROMATICLI_ACTIVE; source '$hook'; cd '$project_dir'; _chromaticli_apply" 2>/dev/null || true ;;
+    *)    zsh  -c "unset _CHROMATICLI_ACTIVE; source '$hook'; cd -- '$project_dir'; _chromaticli_apply" 2>/dev/null || true ;;
+  esac
 }
 
 # ---------------------------------------------------------------------------
@@ -704,30 +758,73 @@ EOF
 # ---------------------------------------------------------------------------
 
 cmd_install() {
-  local force=0
+  local force=0 target_shell="" all_shells=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --help|-h)
         cat <<'EOF'
-Usage: chromaticli install [--force]
+Usage: chromaticli install [--force] [--shell <zsh|bash|fish>] [--all-shells]
 
 Install chromaticli:
   - copies the CLI to ~/.local/bin/chromaticli (so it's on $PATH)
-  - copies hook.zsh + themes.json to ~/.config/chromaticli/
-    (or $XDG_CONFIG_HOME/chromaticli/)
-  - appends a source line to ~/.zshrc
+  - copies hook.zsh, hook.bash, hook.fish + themes.json to
+      ~/.config/chromaticli/ (or $XDG_CONFIG_HOME/chromaticli/)
+  - wires the hook into your shell's rc file
 
-Idempotent — safe to re-run. Use --force to overwrite existing files.
+Shell auto-detection: reads $SHELL and configures that shell by default.
+
+  --shell <zsh|bash|fish>   configure a specific shell instead of auto-detecting
+  --all-shells              configure every supported shell found on this system
+  --force                   overwrite existing installed files; re-wire rc files
+
+`--shell` and `--all-shells` are mutually exclusive.
+
+Idempotent — safe to re-run. Each shell can be added independently:
+  chromaticli install --shell fish   # add fish support to an existing install
 
 If ~/.local/bin is not already on $PATH, a one-line advisory is printed.
 The installer never auto-edits $PATH.
+
+For bash: the hook is added to ~/.bash_profile (macOS login shell default).
+  If your setup only sources ~/.bashrc, add it there manually instead.
+For fish: a one-line shim is written to
+  ~/.config/fish/conf.d/chromaticli.fish (auto-sourced by fish; no rc edit).
 EOF
         return 0 ;;
-      --force) force=1; shift ;;
+      --force)      force=1; shift ;;
+      --shell)
+        [[ -z "${2-}" ]] && die_usage "--shell requires an argument: --shell <zsh|bash|fish>"
+        target_shell="$2"; shift 2 ;;
+      --all-shells) all_shells=1; shift ;;
       *) die_usage "unknown option '$1' for install" ;;
     esac
   done
+
+  # --shell and --all-shells are mutually exclusive
+  if [[ -n "$target_shell" && "$all_shells" == "1" ]]; then
+    die_usage "--shell and --all-shells are mutually exclusive"
+  fi
+
+  if [[ -n "$target_shell" ]]; then
+    case "$target_shell" in
+      zsh|bash|fish) ;;
+      *) die_usage "unsupported shell '$target_shell' — supported: zsh, bash, fish" ;;
+    esac
+  fi
+
+  local -a shells
+  if (( all_shells )); then
+    shells=()
+    command -v zsh  >/dev/null 2>&1 && shells+=(zsh)
+    command -v bash >/dev/null 2>&1 && shells+=(bash)
+    command -v fish >/dev/null 2>&1 && shells+=(fish)
+    (( ${#shells[@]} == 0 )) && die "no supported shells found on PATH"
+  elif [[ -n "$target_shell" ]]; then
+    shells=("$target_shell")
+  else
+    shells=("$(_detect_shell)")
+  fi
 
   # jq is required for the hook to function
   command -v jq >/dev/null || die "jq is required (brew install jq)"
@@ -743,20 +840,31 @@ EOF
   fi
 
   # Validate source files exist in the repo
-  [[ -f "$HOOK_SRC" ]]    || die "hook.zsh not found at $HOOK_SRC"
-  [[ -f "$THEMES_SRC" ]]  || die "themes.json not found at $THEMES_SRC"
-  [[ -f "$CLI_SRC" ]]     || die "chromaticli CLI not found at $CLI_SRC"
+  [[ -f "$HOOK_ZSH_SRC"  ]] || die "hook.zsh not found at $HOOK_ZSH_SRC"
+  [[ -f "$HOOK_BASH_SRC" ]] || die "hook.bash not found at $HOOK_BASH_SRC"
+  [[ -f "$HOOK_FISH_SRC" ]] || die "hook.fish not found at $HOOK_FISH_SRC"
+  [[ -f "$THEMES_SRC"    ]] || die "themes.json not found at $THEMES_SRC"
+  [[ -f "$CLI_SRC"       ]] || die "chromaticli CLI not found at $CLI_SRC"
 
   # Create config dir
   mkdir -p "$CHROMATICLI_CONFIG_DIR"
 
-  # Copy config files
-  if [[ ! -f "$CHROMATICLI_CONFIG_DIR/hook.zsh" || "$force" == "1" ]]; then
-    cp "$HOOK_SRC" "$CHROMATICLI_CONFIG_DIR/hook.zsh"
-    echo "installed: $CHROMATICLI_CONFIG_DIR/hook.zsh"
-  else
-    echo "already present: $CHROMATICLI_CONFIG_DIR/hook.zsh (use --force to overwrite)"
-  fi
+  # Copy all three hook files regardless of which shell(s) are being wired
+  local s src dest
+  for s in zsh bash fish; do
+    case "$s" in
+      zsh)  src="$HOOK_ZSH_SRC"  ;;
+      bash) src="$HOOK_BASH_SRC" ;;
+      fish) src="$HOOK_FISH_SRC" ;;
+    esac
+    dest="$CHROMATICLI_CONFIG_DIR/hook.$s"
+    if [[ ! -f "$dest" || "$force" == "1" ]]; then
+      cp "$src" "$dest"
+      echo "installed: $dest"
+    else
+      echo "already present: $dest (use --force to overwrite)"
+    fi
+  done
 
   if [[ ! -f "$CHROMATICLI_CONFIG_DIR/themes.json" || "$force" == "1" ]]; then
     cp "$THEMES_SRC" "$CHROMATICLI_CONFIG_DIR/themes.json"
@@ -787,48 +895,84 @@ EOF
     echo "installed: $CHROMATICLI_BIN"
   fi
 
-  # Append source block to .zshrc (idempotent via marker)
-  mkdir -p "$(dirname "$ZSHRC")"
-  touch "$ZSHRC"
-
-  if grep -Fq "# chromaticli" "$ZSHRC" 2>/dev/null; then
-    if [[ "$force" == "1" ]]; then
-      # Remove existing block and re-add below
-      local tmp
-      tmp=$(mktemp)
-      local marker_line next_line
-      marker_line=$(grep -n "# chromaticli" "$ZSHRC" | head -1 | cut -d: -f1)
-      next_line=$((marker_line + 1))
-      # Strip blank line before marker if present
-      local prev_line=$((marker_line - 1))
-      local start_line="$marker_line"
-      if (( prev_line > 0 )); then
-        local prev_content
-        prev_content=$(sed -n "${prev_line}p" "$ZSHRC")
-        [[ -z "$prev_content" ]] && start_line="$prev_line"
-      fi
-      sed "${start_line},${next_line}d" "$ZSHRC" > "$tmp"
-      mv "$tmp" "$ZSHRC"
-      cat >> "$ZSHRC" <<EOF
-
-# chromaticli — auto-pair terminal colors to .vscode/settings.json
-source "$CHROMATICLI_CONFIG_DIR/hook.zsh"
-EOF
-      echo "appended source block to $ZSHRC"
-    else
-      echo "already installed in $ZSHRC (use --force to update)"
-    fi
-  else
-    cat >> "$ZSHRC" <<EOF
-
-# chromaticli — auto-pair terminal colors to .vscode/settings.json
-source "$CHROMATICLI_CONFIG_DIR/hook.zsh"
-EOF
-    echo "appended source block to $ZSHRC"
-  fi
+  # Wire rc files for selected shells
+  for shell in "${shells[@]}"; do
+    case "$shell" in
+      zsh)  _install_rc_zsh  "$force" ;;
+      bash) _install_rc_bash "$force" ;;
+      fish) _install_rc_fish "$force" ;;
+    esac
+  done
 
   _print_path_advisory
-  _print_new_shell_hint
+  _print_new_shell_hint "${shells[@]}"
+}
+
+_install_rc_text() {
+  local force="$1" rc_file="$2" source_line="$3"
+  touch "$rc_file"
+
+  if grep -Fq "# chromaticli" "$rc_file" 2>/dev/null; then
+    if [[ "$force" == "1" ]]; then
+      local tmp marker_line next_line prev_line start_line
+      tmp=$(mktemp)
+      marker_line=$(grep -n "# chromaticli" "$rc_file" | head -1 | cut -d: -f1)
+      next_line=$((marker_line + 1))
+      prev_line=$((marker_line - 1))
+      start_line="$marker_line"
+      if (( prev_line > 0 )); then
+        local prev_content
+        prev_content=$(sed -n "${prev_line}p" "$rc_file")
+        [[ -z "$prev_content" ]] && start_line="$prev_line"
+      fi
+      sed "${start_line},${next_line}d" "$rc_file" > "$tmp"
+      mv "$tmp" "$rc_file"
+      printf '\n# chromaticli — auto-pair terminal colors to .vscode/settings.json\n%s\n' \
+        "$source_line" >> "$rc_file"
+      echo "updated source block in $rc_file"
+    else
+      echo "already installed in $rc_file (use --force to update)"
+    fi
+  else
+    printf '\n# chromaticli — auto-pair terminal colors to .vscode/settings.json\n%s\n' \
+      "$source_line" >> "$rc_file"
+    echo "appended source block to $rc_file"
+  fi
+}
+
+_install_rc_zsh() {
+  local force="$1"
+  mkdir -p "$(dirname "$ZSHRC")"
+  _install_rc_text "$force" "$ZSHRC" "source \"$CHROMATICLI_CONFIG_DIR/hook.zsh\""
+}
+
+_install_rc_bash() {
+  local force="$1"
+  local is_new=0
+  grep -Fq "# chromaticli" "$BASH_PROFILE" 2>/dev/null || is_new=1
+  _install_rc_text "$force" "$BASH_PROFILE" "source \"$CHROMATICLI_CONFIG_DIR/hook.bash\""
+  if (( is_new )); then
+    echo "Note: hook added to ~/.bash_profile (macOS login shell default)."
+    echo "      If your setup only sources ~/.bashrc, add it there manually instead."
+  fi
+}
+
+_install_rc_fish() {
+  local force="$1"
+  mkdir -p "$FISH_CONF_D"
+  if [[ -f "$FISH_SHIM" ]]; then
+    if ! grep -Fq "# chromaticli" "$FISH_SHIM" 2>/dev/null; then
+      err "refusing to overwrite $FISH_SHIM: file exists but has no '# chromaticli' marker. Remove it manually first."
+      return 1
+    fi
+    if [[ "$force" != "1" ]]; then
+      echo "already present: $FISH_SHIM (use --force to overwrite)"
+      return 0
+    fi
+  fi
+  printf '# chromaticli — auto-pair terminal colors to .vscode/settings.json\n' > "$FISH_SHIM"
+  printf 'source "%s/hook.fish"\n' "$CHROMATICLI_CONFIG_DIR" >> "$FISH_SHIM"
+  echo "installed: $FISH_SHIM"
 }
 
 # Print a warning if ~/.local/bin is not on $PATH. Never edits $PATH itself —
@@ -839,14 +983,21 @@ _print_path_advisory() {
   esac
   echo ""
   echo "NOTE: $CHROMATICLI_BIN_DIR is not on your \$PATH."
-  echo "To use \`chromaticli\` from any directory, add this line to your ~/.zshrc:"
-  echo ""
-  echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "  Add it to your shell's rc file, e.g.:"
+  echo "    For zsh:  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+  echo "    For bash: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.bash_profile"
+  echo "    For fish: fish_add_path ~/.local/bin"
 }
 
 _print_new_shell_hint() {
   echo ""
-  echo "Open a new shell or run:  exec zsh"
+  for shell in "$@"; do
+    case "$shell" in
+      zsh)  echo "Open a new shell or run:  exec zsh" ;;
+      bash) echo "Open a new shell or run:  exec bash" ;;
+      fish) echo "Open a new shell or run:  exec fish" ;;
+    esac
+  done
 }
 
 # ---------------------------------------------------------------------------
@@ -860,8 +1011,10 @@ Usage: chromaticli uninstall
 
 Reverse a previous \`chromaticli install\`:
   - remove ~/.local/bin/chromaticli (only if signature matches)
-  - remove $CHROMATICLI_CONFIG_DIR (hook.zsh + themes.json)
-  - strip the # chromaticli source block from ~/.zshrc (backup .zshrc.chromaticli.bak)
+  - remove $CHROMATICLI_CONFIG_DIR (hooks + themes.json)
+  - strip the # chromaticli source block from ~/.zshrc if present
+  - strip the # chromaticli source block from ~/.bash_profile if present
+  - remove $FISH_SHIM if present
   - reset the current terminal's colors to its profile defaults
 
 Idempotent — re-running after a clean uninstall is a no-op.
@@ -889,7 +1042,7 @@ EOF
   # --- Step 2: remove the config dir ---
   # chromaticli's curation model puts nothing user-authored here: hook.zsh and
   # themes.json are verbatim copies of the repo. Wiping the dir is symmetric
-  # with install creating it. See Plan.md §9 Q4.8.
+  # with install creating it. See shell-expansion-plan.md.
   if [[ -d "$CHROMATICLI_CONFIG_DIR" ]]; then
     rm -rf "$CHROMATICLI_CONFIG_DIR"
     echo "removed: $CHROMATICLI_CONFIG_DIR"
@@ -898,51 +1051,97 @@ EOF
   fi
 
   # --- Step 3: strip the .zshrc source block ---
-  if [[ ! -f "$ZSHRC" ]]; then
-    echo "no .zshrc found — nothing else to remove."
-    return 0
-  fi
+  if [[ -f "$ZSHRC" ]]; then
+    local marker_line
+    marker_line=$(grep -nF "# chromaticli" "$ZSHRC" 2>/dev/null | head -1 | cut -d: -f1 || true)
 
-  local marker_line
-  marker_line=$(grep -nF "# chromaticli" "$ZSHRC" 2>/dev/null | head -1 | cut -d: -f1 || true)
+    if [[ -z "$marker_line" ]]; then
+      echo "chromaticli hook is not installed in $ZSHRC — nothing to remove."
+    else
+      local next_line=$(( marker_line + 1 ))
 
-  if [[ -z "$marker_line" ]]; then
-    echo "chromaticli hook is not installed in $ZSHRC — nothing to remove."
+      # Defensive check: line after marker must look like a `source` line
+      local src_line
+      src_line=$(sed -n "${next_line}p" "$ZSHRC")
+      if ! [[ "$src_line" =~ ^[[:space:]]*source ]]; then
+        err "refusing to edit $ZSHRC: line after '# chromaticli' doesn't look like a 'source ...' line."
+        err "got: $src_line"
+        err "Inspect $ZSHRC and remove the chromaticli block manually."
+        return 1
+      fi
+
+      # Include the preceding blank line if present (install always writes one)
+      local prev_line=$(( marker_line - 1 ))
+      local start_line="$marker_line"
+      if (( prev_line > 0 )); then
+        local prev_content
+        prev_content=$(sed -n "${prev_line}p" "$ZSHRC")
+        [[ -z "$prev_content" ]] && start_line="$prev_line"
+      fi
+      local end_line="$next_line"
+
+      # Backup before editing
+      local backup="$ZSHRC.chromaticli.bak"
+      cp "$ZSHRC" "$backup"
+
+      sed -i.tmp "${start_line},${end_line}d" "$ZSHRC"
+      rm -f "$ZSHRC.tmp"
+
+      echo "removed chromaticli block from $ZSHRC (lines ${start_line}–${end_line})"
+      echo "backup saved to $backup"
+    fi
   else
-    local next_line=$(( marker_line + 1 ))
-
-    # Defensive check: line after marker must look like a `source` line
-    local src_line
-    src_line=$(sed -n "${next_line}p" "$ZSHRC")
-    if ! [[ "$src_line" =~ ^[[:space:]]*source ]]; then
-      err "refusing to edit $ZSHRC: line after '# chromaticli' doesn't look like a 'source ...' line."
-      err "got: $src_line"
-      err "Inspect $ZSHRC and remove the chromaticli block manually."
-      exit 1
-    fi
-
-    # Include the preceding blank line if present (install always writes one)
-    local prev_line=$(( marker_line - 1 ))
-    local start_line="$marker_line"
-    if (( prev_line > 0 )); then
-      local prev_content
-      prev_content=$(sed -n "${prev_line}p" "$ZSHRC")
-      [[ -z "$prev_content" ]] && start_line="$prev_line"
-    fi
-    local end_line="$next_line"
-
-    # Backup before editing
-    local backup="$ZSHRC.chromaticli.bak"
-    cp "$ZSHRC" "$backup"
-
-    sed -i.tmp "${start_line},${end_line}d" "$ZSHRC"
-    rm -f "$ZSHRC.tmp"
-
-    echo "removed chromaticli block from $ZSHRC (lines ${start_line}–${end_line})"
-    echo "backup saved to $backup"
+    echo "no .zshrc found — nothing to remove for zsh."
   fi
 
-  # --- Step 4: reset current tty ---
+  # --- Step 4: strip the .bash_profile source block ---
+  if [[ -f "$BASH_PROFILE" ]]; then
+    local bash_marker_line
+    bash_marker_line=$(grep -nF "# chromaticli" "$BASH_PROFILE" 2>/dev/null | head -1 | cut -d: -f1 || true)
+
+    if [[ -z "$bash_marker_line" ]]; then
+      echo "chromaticli hook is not installed in $BASH_PROFILE — nothing to remove."
+    else
+      local bash_next_line=$(( bash_marker_line + 1 ))
+      local bash_src_line
+      bash_src_line=$(sed -n "${bash_next_line}p" "$BASH_PROFILE")
+      if ! [[ "$bash_src_line" =~ ^[[:space:]]*source ]]; then
+        err "refusing to edit $BASH_PROFILE: line after '# chromaticli' doesn't look like a 'source ...' line."
+        err "Inspect $BASH_PROFILE and remove the chromaticli block manually."
+        return 1
+      else
+        local bash_prev_line=$(( bash_marker_line - 1 ))
+        local bash_start_line="$bash_marker_line"
+        if (( bash_prev_line > 0 )); then
+          local bash_prev_content
+          bash_prev_content=$(sed -n "${bash_prev_line}p" "$BASH_PROFILE")
+          [[ -z "$bash_prev_content" ]] && bash_start_line="$bash_prev_line"
+        fi
+        local bash_backup="$BASH_PROFILE.chromaticli.bak"
+        cp "$BASH_PROFILE" "$bash_backup"
+        sed -i.tmp "${bash_start_line},${bash_next_line}d" "$BASH_PROFILE"
+        rm -f "$BASH_PROFILE.tmp"
+        echo "removed chromaticli block from $BASH_PROFILE (lines ${bash_start_line}–${bash_next_line})"
+        echo "backup saved to $bash_backup"
+      fi
+    fi
+  else
+    echo "no .bash_profile found — nothing to remove for bash."
+  fi
+
+  # --- Step 5: remove the fish conf.d shim ---
+  if [[ -f "$FISH_SHIM" ]]; then
+    if grep -Fq "# chromaticli" "$FISH_SHIM" 2>/dev/null; then
+      rm -f "$FISH_SHIM"
+      echo "removed: $FISH_SHIM"
+    else
+      err "refusing to remove $FISH_SHIM: file has no '# chromaticli' marker. Inspect and remove manually."
+    fi
+  else
+    echo "not present: $FISH_SHIM (skipped)"
+  fi
+
+  # --- Step 6: reset current tty ---
   _emit_reset
   echo ""
   echo "Current terminal repainted to profile defaults."

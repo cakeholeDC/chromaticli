@@ -11,7 +11,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y shellcheck jq
+        run: sudo apt-get install -y shellcheck zsh
 
       - name: shellcheck — chromaticli (bash)
         run: shellcheck chromaticli
@@ -20,6 +20,27 @@ jobs:
         # zsh is not a supported shellcheck shell; -s bash with inline
         # disable directives for zsh-specific syntax (see hook.zsh header).
         run: shellcheck -s bash hook.zsh
+
+      - name: shellcheck — hook.bash
+        run: shellcheck -s bash hook.bash
+
+      - name: shellcheck — smoke test
+        run: shellcheck tests/smoke.sh
+
+      - name: bash syntax check
+        run: |
+          for f in chromaticli hook.bash tests/smoke.sh; do
+            bash -n "$f"
+          done
+
+      - name: zsh syntax check
+        run: zsh -n hook.zsh
+
+      - name: install fish
+        run: sudo apt-get install -y fish
+
+      - name: fish syntax check
+        run: fish --no-execute hook.fish
 
   previews-up-to-date:
     runs-on: ubuntu-latest
@@ -69,4 +90,4 @@ jobs:
         # terminal: help/version, `list` output, `set/unset --no-install`
         # settings.json writes, exit codes for bad input. The hook + OSC
         # emission belong in tests/SMOKE_TEST.md (the interactive walkthrough).
-        run: ./tests/smoke.sh
+        run: bash tests/smoke.sh

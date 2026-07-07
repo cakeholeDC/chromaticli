@@ -1,10 +1,12 @@
-#!/usr/bin/env zsh
-# chromaticli :: hook.zsh
-# Sourced from ~/.zshrc by `chromaticli install`. On every cd (and on shell
-# init), reads .vscode/settings.json from the current dir tree and emits
-# standard OSC color escapes to /dev/tty. Honors `window.autoDetectColorScheme`
-# + macOS AppleInterfaceStyle for light/dark pairs. Resets on cd out.
-#
+#!/usr/bin/env bash
+# chromaticli — sync terminal colors with VSCode workspace themes.
+# chromaticli :: hook.bash
+# Sourced from ~/.bash_profile by `chromaticli install`. On every cd (detected
+# via PROMPT_COMMAND + $PWD tracking), reads .vscode/settings.json from the
+# current dir tree and emits standard OSC color escapes to /dev/tty.
+# Resets on cd out. Honors `window.autoDetectColorScheme` + macOS
+# AppleInterfaceStyle for light/dark pairs.
+# 
 # OSC codes used (iTerm2, Terminal.app, Alacritty, Kitty, etc.):
 #   OSC 10 ; #RRGGBB  BEL   default foreground
 #   OSC 11 ; #RRGGBB  BEL   default background
@@ -13,15 +15,14 @@
 #   OSC 104             BEL  reset palette 0-15
 #   OSC 110/111/112     BEL  reset fg/bg/cursor
 
-# shellcheck shell=bash
-# shellcheck disable=SC2296  # ${0:A:h} is valid zsh but not recognized by shellcheck
+# Idempotency guard: if .bash_profile is re-sourced (e.g. `source ~/.bash_profile`),
+# skip re-registration to avoid appending _chromaticli_prompt_hook to PROMPT_COMMAND twice.
+[[ "${_CHROMATICLI_HOOK_BASH_LOADED:-}" == "1" ]] && return
+_CHROMATICLI_HOOK_BASH_LOADED=1
 
-# Resolve config dir from this file's absolute location (works after install
-# to ~/.config/chromaticli/).
-_CHROMATICLI_DIR="${0:A:h}"
+_CHROMATICLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CHROMATICLI_THEMES="$_CHROMATICLI_DIR/themes.json"
 
-# --- emit one OSC sequence, wrapping for tmux passthrough if needed ---
 _chromaticli_osc() {
   local body="$1"
   if [[ -n "$TMUX" ]]; then
@@ -36,22 +37,26 @@ _chromaticli_emit() {
   local theme="$1"
   command -v jq >/dev/null || return 1
   local palette
-  # shellcheck disable=SC2034  # used by zsh parameter expansion below
   palette=$(jq -r --arg t "$theme" '
     .themes[$t].palette |
     (.foreground // ""), (.background // ""), (.cursor // ""),
     (.ansi[] // "")
   ' "$_CHROMATICLI_THEMES") || return 1
-  local lines=("${(@f)palette}")
-  local fg=${lines[1]} bg=${lines[2]} cur=${lines[3]}
+  local fg="" bg="" cur="" i=0
+  local ansi=()
+  while IFS= read -r line; do
+    case $i in
+      0) fg="$line" ;; 1) bg="$line" ;; 2) cur="$line" ;;
+      *) ansi+=("$line") ;;
+    esac
+    (( i++ ))
+  done <<< "$palette"
   [[ -z "$bg" ]] && return 1
   [[ -n "$fg"  ]] && _chromaticli_osc "10;$fg"
   [[ -n "$bg"  ]] && _chromaticli_osc "11;$bg"
   [[ -n "$cur" ]] && _chromaticli_osc "12;$cur"
-  local i=0 entry
-  for entry in "${lines[@]:3}"; do
-    [[ -n "$entry" ]] && _chromaticli_osc "4;$i;$entry"
-    (( i++ ))
+  for i in "${!ansi[@]}"; do
+    [[ -n "${ansi[$i]}" ]] && _chromaticli_osc "4;$i;${ansi[$i]}"
   done
 }
 
@@ -62,7 +67,6 @@ _chromaticli_reset() {
   _chromaticli_osc "104"
 }
 
-# Walk up from $PWD looking for .vscode/settings.json; first hit wins.
 _chromaticli_find_settings() {
   local dir="$PWD"
   while [[ "$dir" != "/" && -n "$dir" ]]; do
@@ -70,27 +74,31 @@ _chromaticli_find_settings() {
       printf '%s' "$dir/.vscode/settings.json"
       return 0
     fi
-    dir="${dir:h}"
+    dir="$(dirname "$dir")"
   done
   return 1
 }
 
-# Read settings.json and reverse-lookup to a theme-id from our registry.
 _chromaticli_pick() {
   local settings
   settings=$(_chromaticli_find_settings) || return 1
   command -v jq >/dev/null || return 1
 
   local settings_vals
-  # shellcheck disable=SC2034  # used by zsh parameter expansion below
   settings_vals=$(jq -r '
     (."window.autoDetectColorScheme" // ""),
     (."workbench.preferredLightColorTheme" // ""),
     (."workbench.preferredDarkColorTheme" // ""),
     (."workbench.colorTheme" // "")
   ' "$settings") || return 1
-  local vals=("${(@f)settings_vals}")
-  local auto=${vals[1]} pref_light=${vals[2]} pref_dark=${vals[3]} single=${vals[4]}
+  local auto="" pref_light="" pref_dark="" single="" i=0
+  while IFS= read -r line; do
+    case $i in
+      0) auto="$line" ;; 1) pref_light="$line" ;;
+      2) pref_dark="$line" ;; 3) single="$line" ;;
+    esac
+    (( i++ ))
+  done <<< "$settings_vals"
   local theme_name
 
   if [[ "$auto" == "true" && -n "$pref_light" && -n "$pref_dark" ]]; then
@@ -105,18 +113,16 @@ _chromaticli_pick() {
     return 1
   fi
 
-  jq -r --arg n "$theme_name" '
-    .themes | to_entries[] | select(.value.vscode.theme_id == $n) | .key
-  ' "$_CHROMATICLI_THEMES"
+  jq -r --arg n "$theme_name" \
+    '.themes | to_entries[] | select(.value.vscode.theme_id == $n) | .key' \
+    "$_CHROMATICLI_THEMES"
 }
 
 _chromaticli_apply() {
-  # Skip when running inside an IDE's integrated terminal — the editor already
-  # syncs terminal colors to its own theme. Override with CHROMATICLI_FORCE=1.
   if [[ -z "${CHROMATICLI_FORCE-}" ]]; then
     case "$TERM_PROGRAM" in
       vscode|cursor) return ;;
-    esac
+      esac
   fi
 
   local theme
@@ -132,22 +138,38 @@ _chromaticli_apply() {
   fi
 }
 
-# Re-evaluate on macOS Appearance flip (cheap: one `defaults read` per prompt,
-# only acts when the value changed AND a themed dir is currently active).
 _chromaticli_precmd_check_appearance() {
   [[ -z "${_CHROMATICLI_ACTIVE-}" ]] && return
   local cur
   cur="$(defaults read -g AppleInterfaceStyle 2>/dev/null || echo Light)"
   if [[ "$cur" != "${_CHROMATICLI_APPEARANCE-}" ]]; then
     export _CHROMATICLI_APPEARANCE="$cur"
-    unset _CHROMATICLI_ACTIVE   # force re-pick + re-emit
+    unset _CHROMATICLI_ACTIVE
     _chromaticli_apply
   fi
 }
 
-autoload -Uz add-zsh-hook
-add-zsh-hook chpwd  _chromaticli_apply
-add-zsh-hook precmd _chromaticli_precmd_check_appearance
+# Simulate chpwd: fire _chromaticli_apply only when $PWD changes.
+# Appearance re-check runs every prompt when directory is unchanged.
+_CHROMATICLI_PREV_PWD="$PWD"
+_chromaticli_prompt_hook() {
+  if [[ "$PWD" != "$_CHROMATICLI_PREV_PWD" ]]; then
+    _CHROMATICLI_PREV_PWD="$PWD"
+    _chromaticli_apply
+  else
+    _chromaticli_precmd_check_appearance
+  fi
+}
 
-# Apply once on shell init for the spawning directory.
+# Bash 5.1+ supports PROMPT_COMMAND as an array. Detect and prepend correctly.
+# ponytail: scalar branch handles bash 3.2 (macOS default) and 4.x; array branch
+# handles 5.1+ where PROMPT_COMMAND may already be an array.
+if declare -p PROMPT_COMMAND 2>/dev/null | grep -q 'declare \-a'; then
+  PROMPT_COMMAND=("_chromaticli_prompt_hook" "${PROMPT_COMMAND[@]}")
+elif [[ -z "${PROMPT_COMMAND:-}" ]]; then
+  PROMPT_COMMAND="_chromaticli_prompt_hook"
+else
+  PROMPT_COMMAND="_chromaticli_prompt_hook; ${PROMPT_COMMAND}"
+fi
+
 _chromaticli_apply

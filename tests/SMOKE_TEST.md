@@ -15,7 +15,8 @@ hook loading, OSC emission, `cd`-driven repainting, macOS Appearance flips.
 
 - `jq` installed (`brew install jq`)
 - A freshly cloned repo at `~/dev/chromaticli` (or wherever you cloned)
-- A zsh shell
+- zsh, bash, or fish (the walkthrough below uses zsh; see the shell-specific notes
+  at each step for bash and fish equivalents)
 
 ---
 
@@ -44,6 +45,8 @@ chromaticli 0.1.0
 **Expected:**
 ```
 installed: /Users/<you>/.config/chromaticli/hook.zsh
+installed: /Users/<you>/.config/chromaticli/hook.bash
+installed: /Users/<you>/.config/chromaticli/hook.fish
 installed: /Users/<you>/.config/chromaticli/themes.json
 installed: /Users/<you>/.local/bin/chromaticli
 appended source block to /Users/<you>/.zshrc
@@ -51,16 +54,25 @@ appended source block to /Users/<you>/.zshrc
 Open a new shell or run:  exec zsh
 ```
 
+> **bash users:** replace `~/.zshrc` with `~/.bash_profile` in the `grep` command above.
+> The source line will reference `hook.bash` instead of `hook.zsh`.
+> The reload hint will say `exec bash`.
+>
+> **fish users:** no rc file is edited. Instead, verify the conf.d shim exists:
+> `ls ~/.config/fish/conf.d/chromaticli.fish`. The reload hint will say `exec fish`.
+
 If `~/.local/bin` is NOT already on your `$PATH`, you'll also see:
 
 ```
 NOTE: /Users/<you>/.local/bin is not on your $PATH.
-To use `chromaticli` from any directory, add this line to your ~/.zshrc:
-
-    export PATH="$HOME/.local/bin:$PATH"
+  Add it to your shell's rc file, e.g.:
+    For zsh:  echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+    For bash: echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bash_profile
+    For fish: fish_add_path ~/.local/bin
 ```
 
-Add that line if shown, then `exec zsh` to pick it up.
+Add that line if shown, then start a new shell session (or run `exec zsh`,
+`exec bash`, or `exec fish`) to pick it up.
 
 Verify the CLI is now on `$PATH`:
 
@@ -88,15 +100,16 @@ Re-running install should be idempotent:
 ./chromaticli install
 ```
 
-**Expected:** `already present: ...hook.zsh`, `already present: ...themes.json`,
-and `already present: ...local/bin/chromaticli` (no second source block added).
+**Expected:** `already present: ...hook.zsh`, `already present: ...hook.bash`,
+`already present: ...hook.fish`, `already present: ...themes.json`, and
+`already present: ...local/bin/chromaticli` (no second source block added).
 
 ---
 
 ## Step 3 — Reload shell with hook
 
 ```sh
-exec zsh
+exec zsh   # or: exec bash / exec fish
 ```
 
 **Expected:** Shell reloads without errors or warnings. The hook is now loaded.
@@ -107,6 +120,11 @@ which _chromaticli_apply
 ```
 
 **Expected:** `_chromaticli_apply` (or `_chromaticli_apply is a shell function`)
+
+> **bash users:** `which _chromaticli_apply` will not work (bash doesn't support `which`
+> for functions). Use `type _chromaticli_apply` instead.
+>
+> **fish users:** use `type -t _chromaticli_apply` or `functions _chromaticli_apply`.
 
 ---
 
@@ -293,12 +311,17 @@ removed: /Users/<you>/.local/bin/chromaticli
 removed: /Users/<you>/.config/chromaticli
 removed chromaticli block from /Users/<you>/.zshrc (lines N–M)
 backup saved to /Users/<you>/.zshrc.chromaticli.bak
+chromaticli hook is not installed in /Users/<you>/.bash_profile — nothing to remove.
+not present: /Users/<you>/.config/fish/conf.d/chromaticli.fish (skipped)
 
 Current terminal repainted to profile defaults.
 
 Project .vscode/ files were left alone (the hook is gone, so they're
 inert in any new shell — VSCode still reads them as normal).
 ```
+
+(The exact output varies by which shells were installed. Each cleanup step reports
+its result individually.)
 
 Verify the install footprint is gone:
 
@@ -348,3 +371,5 @@ Re-running uninstall should be idempotent (no-op):
 | Foreign binary at install path | `echo '#!/bin/sh' > ~/.local/bin/chromaticli; chmod +x ~/.local/bin/chromaticli; ./chromaticli install` | Exit 1, error: "refusing to overwrite ... signature comment missing". Bin is preserved. |
 | Foreign binary at uninstall path | (same setup) then `chromaticli uninstall` | Refuses to remove the foreign file (warns), proceeds with the rest of uninstall |
 | Sync idempotence regression (Q4.9 guard) | From a themed dir, run `chromaticli set monokai` twice in a row | Terminal visibly repaints **both** times. A silent second invocation means the `unset _CHROMATICLI_ACTIVE` bypass in `cmd_sync`'s zsh subshell has regressed. |
+| `--shell` and `--all-shells` together | `chromaticli install --shell zsh --all-shells` | Exit 2, "mutually exclusive" error |
+| bash-only install | `chromaticli install --shell bash`, then `grep "# chromaticli" ~/.bash_profile` | Marker present in `.bash_profile`; `.zshrc` unchanged |
