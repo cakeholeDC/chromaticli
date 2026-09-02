@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # chromaticli — sync terminal colors with VSCode workspace themes.
-# See README.md for usage. Spec: shell-expansion-plan.md.
+# See README.md for usage.
 
 set -euo pipefail
 
-CHROMATICLI_VERSION="0.1.0"
+CHROMATICLI_VERSION="0.1.0" # x-release-please-version
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHROMATICLI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli"
 CHROMATICLI_BIN_DIR="$HOME/.local/bin"
@@ -653,8 +653,7 @@ EOF
   [[ -n "$pair_id"  ]] && pair_id=$(_resolve_in_mode pair  "$pair_id")
 
   # For pairs: pick light or dark half based on current Appearance. On
-  # non-Darwin, fall back to light with the same warning `set --pair` uses
-  # (consistent with shell-expansion-plan.md — macOS-first for pair auto-switching).
+  # non-Darwin, fall back to light with the same warning `set --pair` uses.
   if [[ -n "$pair_id" ]]; then
     local light dark
     light=$(jq -r --arg p "$pair_id" '.pairs[$p].light // empty' "$THEMES_JSON")
@@ -1042,7 +1041,7 @@ EOF
   # --- Step 2: remove the config dir ---
   # chromaticli's curation model puts nothing user-authored here: hook.zsh and
   # themes.json are verbatim copies of the repo. Wiping the dir is symmetric
-  # with install creating it. See shell-expansion-plan.md.
+  # with install creating it.
   if [[ -d "$CHROMATICLI_CONFIG_DIR" ]]; then
     rm -rf "$CHROMATICLI_CONFIG_DIR"
     echo "removed: $CHROMATICLI_CONFIG_DIR"

@@ -9,19 +9,11 @@
   pronounced <em>chromatically</em> (/kroʊˈmæ.tɪ.kli/).
 </p>
 
-ChromatiCLI makes your terminal match the VS Code theme for the project you
-are in. When you `cd` into a folder with `.vscode/settings.json`, it reads
-`workbench.colorTheme` and repaints your terminal automatically.
+ChromatiCLI makes your terminal match the VS Code theme for the project you are in. When you `cd` into a folder with `.vscode/settings.json`, it reads `workbench.colorTheme` and repaints your terminal automatically.
 
-It works with iTerm2, Terminal.app, Alacritty, Kitty, and any terminal that
-supports OSC color sequences.
+It works with iTerm2, Terminal.app, Alacritty, Kitty, and any terminal that supports OSC color sequences.
 
-**Platform support:** The terminal hook and OSC color sequences work on any platform
-(macOS, Linux) with a compatible terminal emulator (iTerm2, Terminal.app, kitty,
-Alacritty, WezTerm, and others that support OSC 10/11/12/4). Light/dark pair
-auto-switching via `window.autoDetectColorScheme` requires macOS (uses
-`defaults read -g AppleInterfaceStyle`). On Linux, pairs always apply the light half.
-Single themes work identically on all platforms.
+**Platform support:** The terminal hook and OSC color sequences work on any platform (macOS, Linux) with a compatible terminal emulator (iTerm2, Terminal.app, kitty, Alacritty, WezTerm, and others that support OSC 10/11/12/4). Light/dark pair auto-switching via `window.autoDetectColorScheme` requires macOS (uses `defaults read -g AppleInterfaceStyle`). On Linux, pairs always apply the light half. Single themes work identically on all platforms.
 
 ---
 
@@ -43,8 +35,7 @@ Single themes work identically on all platforms.
 - `~/.config/chromaticli/themes.json` — the theme and light/dark pair registry.
 - A small source block in your shell rc file so the hook loads in every new shell.
 
-Once installed, the hook finds the nearest `.vscode/settings.json`, maps the
-workspace theme to a terminal palette, and issues OSC color sequences.
+Once installed, the hook finds the nearest `.vscode/settings.json`, maps the workspace theme to a terminal palette, and issues OSC color sequences.
 
 ---
 
@@ -76,20 +67,15 @@ cd ~/dev/chromaticli
 # Start a new shell session for the hook to load.
 ```
 
-`install` detects your login shell via `$SHELL` and wires the hook automatically.
-To configure a different shell, use `--shell <zsh|bash|fish>`. To configure all
-supported shells at once, use `--all-shells`.
+`install` detects your login shell via `$SHELL` and wires the hook automatically. To configure a different shell, use `--shell <zsh|bash|fish>`. To configure all supported shells at once, use `--all-shells`.
 
-**For bash users:** the hook is added to `~/.bash_profile` (macOS opens login shells
-by default). If your setup only sources `~/.bashrc`, add the source line there manually.
+**For bash users:** the hook is added to `~/.bash_profile` (macOS opens login shells by default). If your setup only sources `~/.bashrc`, add the source line there manually.
 
-**For fish users:** a one-line file is written to `~/.config/fish/conf.d/chromaticli.fish`.
-Fish auto-sources everything in `conf.d/` — no manual rc editing required.
+**For fish users:** a one-line file is written to `~/.config/fish/conf.d/chromaticli.fish`. Fish auto-sources everything in `conf.d/` — no manual rc editing required.
 
 Start a new shell session (or run `exec zsh`, `exec bash`, or `exec fish`) for the hook to take effect.
 
-If `~/.local/bin` is not on your `PATH`, the installer prints a one-line
-`export PATH=...` advisory. It does not modify your path automatically.
+If `~/.local/bin` is not on your `PATH`, the installer prints a one-line `export PATH=...` advisory. It does not modify your path automatically.
 
 The install step is idempotent, so you can run it again safely.
 
@@ -121,8 +107,7 @@ git pull
 exec zsh    # or exec bash / exec fish
 ```
 
-`--force` overwrites the installed binary, hooks, and themes registry, and
-re-wires the rc file for the active shell (or all shells if `--all-shells` was used).
+`--force` overwrites the installed binary, hooks, and themes registry, and re-wires the rc file for the active shell (or all shells if `--all-shells` was used).
 
 ---
 
@@ -136,17 +121,14 @@ chromaticli uninstall
 
 ### Installed via Homebrew (future)
 
-`brew uninstall` removes only the binary. It does **not** remove hook files or rc entries.
-Run `chromaticli uninstall` **before** `brew uninstall`:
+`brew uninstall` removes only the binary. It does **not** remove hook files or rc entries. Run `chromaticli uninstall` **before** `brew uninstall`:
 
 ```sh
 chromaticli uninstall   # removes hooks, rc entries, and ~/.config/chromaticli/
 brew uninstall chromaticli   # removes the binary from PATH
 ```
 
-Skipping `chromaticli uninstall` leaves orphaned files in `~/.config/chromaticli/` and
-source lines in your shell rc. They are harmless but should be removed manually if the
-binary is gone.
+Skipping `chromaticli uninstall` leaves orphaned files in `~/.config/chromaticli/` and source lines in your shell rc. They are harmless but should be removed manually if the binary is gone.
 
 ---
 
@@ -158,13 +140,9 @@ binary is gone.
 - The `chromaticli` source block from `~/.bash_profile` (if present)
 - `~/.config/fish/conf.d/chromaticli.fish` (if present)
 
-Project `.vscode/settings.json` files are left intact so VS Code continues to
-use them normally.
+Project `.vscode/settings.json` files are left intact so VS Code continues to use them normally.
 
-> **Note:** `uninstall` always removes hook wiring for all shells at once. There is no
-> `--shell` flag to selectively de-wire one shell. If you want to remove only the fish
-> hook, for example, delete `~/.config/fish/conf.d/chromaticli.fish` and remove the
-> relevant source line manually.
+> **Note:** `uninstall` always removes hook wiring for all shells at once. There is no `--shell` flag to selectively de-wire one shell. If you want to remove only the fish hook, for example, delete `~/.config/fish/conf.d/chromaticli.fish` and remove the relevant source line manually.
 
 ---
 
@@ -201,11 +179,9 @@ Every subcommand supports `--help`.
 5. If a `workbench.colorTheme` is found, it maps that theme to a terminal palette.
 6. The hook emits OSC color escapes for foreground, background, cursor, and ANSI colors.
 7. In tmux, it wraps the sequences so the terminal receives them correctly.
-8. Inside VS Code / Cursor integrated terminals, the hook skips emission by default
-   because those environments already control terminal colors.
+8. Inside VS Code / Cursor integrated terminals, the hook skips emission by default because those environments already control terminal colors.
 
-For light/dark pairs, the hook also re-checks macOS appearance and reapplies
-colors when the system changes.
+For light/dark pairs, the hook also re-checks macOS appearance and reapplies colors when the system changes.
 
 ---
 
@@ -218,11 +194,9 @@ ChromatiCLI includes 12 curated themes and 2 light/dark pairs.
 - Light: `light-modern`, `solarized-light`
 - Pairs: `default` (light-modern ↔ dark-modern), `solarized` (solarized-light ↔ solarized-dark)
 
-See the gallery at [`docs/theme_preview.md`](docs/theme_preview.md) or
-[`docs/theme_preview.html`](docs/theme_preview.html).
+See the gallery at [`docs/theme_preview.md`](docs/theme_preview.md) or [`docs/theme_preview.html`](docs/theme_preview.html).
 
-To propose a new theme, read the guidance in
-[`CONTRIBUTING.md`](CONTRIBUTING.md#adding-a-theme).
+To propose a new theme, read the guidance in [`CONTRIBUTING.md`](CONTRIBUTING.md#adding-a-theme).
 
 ---
 
@@ -230,13 +204,9 @@ To propose a new theme, read the guidance in
 
 **The terminal doesn’t change colors after `cd`.**
 
-- There is no `.vscode/settings.json` in this directory or any parent.
-  Run `chromaticli set <theme>` to create one.
-- You are in a VS Code or Cursor integrated terminal. The hook skips OSC
-  emission there by default. Use `CHROMATICLI_FORCE=1` to override.
-- The hook isn’t loaded. `which _chromaticli_apply` should print
-  `shell function`. If it does not, start a new shell session (or run `exec zsh`, `exec bash`, or `exec fish`) to pick
-  up the latest hook.
+- There is no `.vscode/settings.json` in this directory or any parent. Run `chromaticli set <theme>` to create one.
+- You are in a VS Code or Cursor integrated terminal. The hook skips OSC emission there by default. Use `CHROMATICLI_FORCE=1` to override.
+- The hook isn’t loaded. `which _chromaticli_apply` should print `shell function`. If it does not, start a new shell session (or run `exec zsh`, `exec bash`, or `exec fish`) to pick up the latest hook.
 - Your terminal does not support OSC 4/10/11/12. Test with:
 
   ```sh
@@ -245,52 +215,45 @@ To propose a new theme, read the guidance in
 
 **I use bash/fish and the hook isn’t firing after install.**
 
-- For bash: check that `~/.bash_profile` contains the `# chromaticli` source line.
-  If your setup sources `.bashrc` instead, add the line there manually.
-  The hook is at `~/.config/chromaticli/hook.bash`.
-- For fish: check that `~/.config/fish/conf.d/chromaticli.fish` exists.
-  Run `exec fish` to reload. If the file is missing, rerun `chromaticli install`.
+- For bash: check that `~/.bash_profile` contains the `# chromaticli` source line. If your setup sources `.bashrc` instead, add the line there manually. The hook is at `~/.config/chromaticli/hook.bash`.
+- For fish: check that `~/.config/fish/conf.d/chromaticli.fish` exists. Run `exec fish` to reload. If the file is missing, rerun `chromaticli install`.
 
 **`chromaticli preview` says "no hook found" even though the hook is firing on `cd`.**
 
-`preview` spawns a subshell to emit colors and requires the installed hook file to
-exist at `~/.config/chromaticli/hook.<shell>`. Run `chromaticli install` first. In a
-fresh git clone, running `./chromaticli preview` without installing will now fail — this
-is intentional (the old fallback to the repo-side hook could not safely source across
-shell boundaries).
+`preview` spawns a subshell to emit colors and requires the installed hook file to exist at `~/.config/chromaticli/hook.<shell>`. Run `chromaticli install` first. In a fresh git clone, running `./chromaticli preview` without installing will now fail — this is intentional (the old fallback to the repo-side hook could not safely source across shell boundaries).
 
 **I use bash/fish but `sync` and `preview` still invoke `hook.zsh`.**
 
-chromaticli reads `$SHELL` to detect your login shell. On macOS, `$SHELL` reflects
-your *login* shell — if you spawned bash or fish from a zsh login session, `$SHELL`
-still points to zsh. Use `--shell` to override:
+chromaticli reads `$SHELL` to detect your login shell. On macOS, `$SHELL` reflects your *login* shell — if you spawned bash or fish from a zsh login session, `$SHELL` still points to zsh.
 
-  chromaticli sync --project .    # uses $SHELL; may pick wrong hook
-  SHELL=bash chromaticli sync     # forces bash hook
+Use `--shell` to override:
+
+```sh
+chromaticli sync --project .    # uses $SHELL; may pick the wrong hook
+SHELL=bash chromaticli sync     # explicitly uses the bash hook
+```
 
 To avoid this permanently, change your login shell:
-  chsh -s /bin/bash   # or /usr/local/bin/fish
+
+```sh
+chsh -s /bin/bash   # or /usr/local/bin/fish
+```
 
 **Nothing changes in tmux.**
 
-Add `set -g allow-passthrough on` to `~/.tmux.conf` and reload tmux.
-The hook already wraps emissions for passthrough; tmux must forward them.
+Add `set -g allow-passthrough on` to `~/.tmux.conf` and reload tmux. The hook already wraps emissions for passthrough; tmux must forward them.
 
 **`set --pair` does not follow Light/Dark on Linux.**
 
-Appearance detection currently uses `defaults read -g AppleInterfaceStyle`
-on macOS only. On other platforms, pair mode defaults to the light theme.
-Single themes still work cross-platform.
+Appearance detection currently uses `defaults read -g AppleInterfaceStyle` on macOS only. On other platforms, pair mode defaults to the light theme. Single themes still work cross-platform.
 
 **I pulled new repo code but behavior is still old.**
 
-The installed files live in `~/.local/bin/` and `~/.config/chromaticli/`.
-Run `./chromaticli install --force` from the repo to update them.
+The installed files live in `~/.local/bin/` and `~/.config/chromaticli/`. Run `./chromaticli install --force` from the repo to update them.
 
 **`install` refuses to overwrite `~/.local/bin/chromaticli`.**
 
-That means another file already exists there. Inspect it, remove or rename it,
-then rerun install.
+That means another file already exists there. Inspect it, remove or rename it, then rerun install.
 
 ---
 
@@ -306,8 +269,15 @@ then rerun install.
 
 ## Walkthrough
 
-For a guided install/test/uninstall flow with expected output, see
-[`tests/SMOKE_TEST.md`](tests/SMOKE_TEST.md).
+For a guided install/test/uninstall flow with expected output, see [`tests/SMOKE_TEST.md`](tests/SMOKE_TEST.md).
+
+---
+
+## Contributing and releases
+
+All changes are made through pull requests and squash merged. Pull request titles use Conventional Commits because the title becomes the commit on `main`. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the accepted types and local checks.
+
+Release Please turns those commits into a changelog and release pull request. Merging the release pull request creates a `vX.Y.Z` tag and GitHub release.
 
 ---
 
@@ -319,6 +289,9 @@ For a guided install/test/uninstall flow with expected output, see
 /hook.bash            bash hook sourced by `.bash_profile`
 /hook.fish            fish hook sourced via conf.d shim
 /themes.json          theme and pair registry
+/release-please-config.json       release behavior and changelog configuration
+/.release-please-manifest.json    last released version
+/.github/workflows/               CI, PR-title, and release workflows
 /tests/SMOKE_TEST.md  manual walkthrough
 /docs/
   theme_preview.md    theme gallery for GitHub

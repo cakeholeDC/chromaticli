@@ -32,8 +32,11 @@ require "$CHROMATICLI"
 
 echo "=== top-level help / version / usage ==="
 
-"$CHROMATICLI" --version | grep -q "^chromaticli " || fail "--version output"
-pass "--version prints semver-style line"
+EXPECTED_VERSION=$(sed -n 's/^CHROMATICLI_VERSION="\([^"]*\)".*/\1/p' "$CHROMATICLI")
+[[ -n "$EXPECTED_VERSION" ]] || fail "could not read CHROMATICLI_VERSION"
+[[ $("$CHROMATICLI" --version) == "chromaticli $EXPECTED_VERSION" ]] \
+  || fail "--version does not match CHROMATICLI_VERSION"
+pass "--version matches CHROMATICLI_VERSION ($EXPECTED_VERSION)"
 
 "$CHROMATICLI" --help > /dev/null || fail "--help exit"
 pass "--help exits 0"
