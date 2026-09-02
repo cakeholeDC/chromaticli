@@ -47,8 +47,9 @@ updates a release pull request containing the changelog, version update, and
 release manifest. Merging that pull request creates the `vX.Y.Z` tag and GitHub
 release. Do not create release tags or edit generated release files manually.
 
-The first release starts from manifest version `0.0.0`; merging the initial
-`feat` prepares release `v0.1.0`.
+The first release is explicitly bootstrapped as `v0.1.0` in the Release Please
+configuration. Remove that one-time `release-as` override after `v0.1.0` is
+published so later versions return to Conventional Commit calculation.
 
 ## Adding a theme
 
