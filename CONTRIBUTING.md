@@ -1,7 +1,8 @@
 # Contributing to chromaticli
 
 Thanks for your interest. Contributions are welcome — the most common paths are
-adding a theme and adding a new shell.
+adding a theme and adding a new shell. All changes, including maintainer
+changes, go through pull requests.
 
 ## Setup
 
@@ -11,6 +12,43 @@ cd chromaticli
 brew install jq          # only hard dependency
 ./tests/smoke.sh         # must pass before and after your change
 ```
+
+## Pull request titles
+
+Pull requests are squash merged, so the title becomes the commit on `main`.
+Use a Conventional Commit title:
+
+```text
+type: description
+type(scope): description
+type(scope)!: breaking description
+```
+
+Accepted types are `feat`, `fix`, `docs`, `ci`, `chore`, `refactor`, `perf`,
+`test`, `build`, `style`, and `revert`. Scopes are optional and are not
+restricted.
+
+Examples:
+
+```text
+feat(hooks): support a new shell
+fix(cli): preserve settings when an update fails
+docs: explain fish installation
+```
+
+Use `feat` for a user-visible feature and `fix` for a user-visible bug fix.
+Before version 1.0, a breaking change marked with `!` bumps the minor version.
+Moving to 1.0 is an explicit maintainer decision.
+
+## Releases
+
+Release Please runs after a pull request is merged to `main`. It opens or
+updates a release pull request containing the changelog, version update, and
+release manifest. Merging that pull request creates the `vX.Y.Z` tag and GitHub
+release. Do not create release tags or edit generated release files manually.
+
+The first release starts from manifest version `0.0.0`; merging the initial
+`feat` prepares release `v0.1.0`.
 
 ## Adding a theme
 
@@ -62,8 +100,8 @@ native directory-change events).
 ## Pull request checklist
 
 - `./tests/smoke.sh` passes locally
+- The pull request title follows the Conventional Commit format above
 - For theme PRs: `verify-themes.py` and `generate-preview.py` both ran and their
   outputs are committed
 - For hook/install changes: new smoke tests added and passing
 - No new dependencies introduced
-- Commit messages describe behavior, not implementation details
