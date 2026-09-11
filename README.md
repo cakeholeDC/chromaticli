@@ -28,7 +28,7 @@ It works with iTerm2, Terminal.app, Alacritty, Kitty, and any terminal that supp
 
 ## What it does
 
-`chromaticli install` sets up everything needed to keep terminal colors in sync:
+`chromaticli install` sets up the shell integration needed to keep terminal colors in sync. A source installation creates:
 
 - `~/.local/bin/chromaticli` — the CLI executable on your path.
 - `~/.config/chromaticli/hook.{zsh,bash,fish}` — shell hooks that run on directory changes.
@@ -59,6 +59,20 @@ These are optional helpers for a better developer experience.
 ---
 
 ## Install
+
+### Homebrew tap
+
+After the first release is published, install from the project tap:
+
+```sh
+brew install cakeholeDC/tap/chromaticli
+chromaticli install
+# Start a new shell session for the hook to load.
+```
+
+Homebrew owns the command, hooks, and theme registry. `chromaticli install` only wires the Homebrew-managed hook into your shell; it does not copy another executable into `~/.local/bin`.
+
+### Source checkout
 
 ```sh
 git clone https://github.com/cakeholeDC/chromaticli ~/dev/chromaticli
@@ -119,16 +133,16 @@ exec zsh    # or exec bash / exec fish
 chromaticli uninstall
 ```
 
-### Installed via Homebrew (future)
+### Installed via Homebrew
 
-`brew uninstall` removes only the binary. It does **not** remove hook files or rc entries. Run `chromaticli uninstall` **before** `brew uninstall`:
+`brew uninstall` does not remove shell rc entries created by `chromaticli install`. Remove the shell integration first:
 
 ```sh
-chromaticli uninstall   # removes hooks, rc entries, and ~/.config/chromaticli/
-brew uninstall chromaticli   # removes the binary from PATH
+chromaticli uninstall
+brew uninstall cakeholeDC/tap/chromaticli
 ```
 
-Skipping `chromaticli uninstall` leaves orphaned files in `~/.config/chromaticli/` and source lines in your shell rc. They are harmless but should be removed manually if the binary is gone.
+Skipping `chromaticli uninstall` leaves a source line in your shell rc that points to the removed Homebrew hook. Remove that block manually if the command is already gone.
 
 ---
 
@@ -156,7 +170,7 @@ chromaticli --version | -v
 
 | Command | Description |
 |---|---|
-| `install [--shell <zsh\|bash\|fish>] [--all-shells] [--force]` | Copy CLI and hooks; wire the hook into your shell rc (auto-detects login shell via `$SHELL` by default). |
+| `install [--shell <zsh\|bash\|fish>] [--all-shells] [--force]` | Install from a source checkout if needed, then wire the hook into your shell rc (auto-detects login shell via `$SHELL` by default). |
 | `uninstall` | Remove CLI, config dir, and hook wiring from all shells. |
 | `list` | Show available themes and pairs with inline palette previews. |
 | `set [<theme\|pair\|N>]` | Apply a theme to the current project. No arg opens an interactive picker. |
@@ -172,7 +186,7 @@ Every subcommand supports `--help`.
 
 ## How it works
 
-1. `chromaticli install` copies the CLI and all three shell hooks into your home config.
+1. `chromaticli install` uses package-managed files in place, or copies the CLI and hooks into your home directories for a source installation.
 2. It wires only the selected shell, or your login shell by default.
 3. The hook runs on each directory change (zsh: `chpwd`; bash: `PROMPT_COMMAND`; fish: `--on-variable PWD`).
 4. It looks for the nearest `.vscode/settings.json`.
@@ -215,12 +229,12 @@ To propose a new theme, read the guidance in [`CONTRIBUTING.md`](CONTRIBUTING.md
 
 **I use bash/fish and the hook isn’t firing after install.**
 
-- For bash: check that `~/.bash_profile` contains the `# chromaticli` source line. If your setup sources `.bashrc` instead, add the line there manually. The hook is at `~/.config/chromaticli/hook.bash`.
+- For bash: check that `~/.bash_profile` contains the `# chromaticli` source line. If your setup sources `.bashrc` instead, add that source line there manually.
 - For fish: check that `~/.config/fish/conf.d/chromaticli.fish` exists. Run `exec fish` to reload. If the file is missing, rerun `chromaticli install`.
 
 **`chromaticli preview` says "no hook found" even though the hook is firing on `cd`.**
 
-`preview` spawns a subshell to emit colors and requires the installed hook file to exist at `~/.config/chromaticli/hook.<shell>`. Run `chromaticli install` first. In a fresh git clone, running `./chromaticli preview` without installing will now fail — this is intentional (the old fallback to the repo-side hook could not safely source across shell boundaries).
+`preview` spawns a subshell to emit colors and requires the configured hook file to exist. Run `chromaticli install` first. In a fresh git clone, running `./chromaticli preview` without installing will fail because the repo-side hook has not been configured yet.
 
 **I use bash/fish but `sync` and `preview` still invoke `hook.zsh`.**
 
