@@ -6,6 +6,8 @@ set -euo pipefail
 
 CHROMATICLI_VERSION="0.1.0" # x-release-please-version
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHROMATICLI_MANAGED_DIR="${CHROMATICLI_LIBEXEC:-}"
+CHROMATICLI_SOURCE_DIR="${CHROMATICLI_MANAGED_DIR:-$SCRIPT_DIR}"
 CHROMATICLI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli"
 CHROMATICLI_BIN_DIR="$HOME/.local/bin"
 CHROMATICLI_BIN="$CHROMATICLI_BIN_DIR/chromaticli"
@@ -14,21 +16,21 @@ BASH_PROFILE="$HOME/.bash_profile"
 FISH_CONF_D="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
 FISH_SHIM="$FISH_CONF_D/chromaticli.fish"
 
-# Install source paths — only valid when running from the repo clone.
-# Used by `install` to copy into ~/.config/chromaticli/ and ~/.local/bin/.
-# Reading-side code paths use $THEMES_JSON instead, which resolves to the
-# installed copy when present.
-THEMES_SRC="$SCRIPT_DIR/themes.json"
-HOOK_ZSH_SRC="$SCRIPT_DIR/hook.zsh"
-HOOK_BASH_SRC="$SCRIPT_DIR/hook.bash"
-HOOK_FISH_SRC="$SCRIPT_DIR/hook.fish"
-CLI_SRC="$SCRIPT_DIR/chromaticli"
+# Homebrew's wrapper sets CHROMATICLI_LIBEXEC to its stable opt_libexec path.
+# Without it, sources come from the repo clone and install copies them into the
+# user's config and bin directories as before.
+THEMES_SRC="$CHROMATICLI_SOURCE_DIR/themes.json"
+HOOK_ZSH_SRC="$CHROMATICLI_SOURCE_DIR/hook.zsh"
+HOOK_BASH_SRC="$CHROMATICLI_SOURCE_DIR/hook.bash"
+HOOK_FISH_SRC="$CHROMATICLI_SOURCE_DIR/hook.fish"
+CLI_SRC="$CHROMATICLI_SOURCE_DIR/chromaticli"
+HOOK_INSTALL_DIR="${CHROMATICLI_MANAGED_DIR:-$CHROMATICLI_CONFIG_DIR}"
 
-# Runtime themes.json lookup: prefer the installed copy at $CHROMATICLI_CONFIG_DIR
-# (so the binary in ~/.local/bin/ can find it), fall back to the repo copy
-# next to the script (so `./chromaticli list` works in a fresh clone before
-# install has been run).
-if [[ -f "$CHROMATICLI_CONFIG_DIR/themes.json" ]]; then
+# Runtime themes.json lookup: package-managed files take precedence. Otherwise,
+# prefer the installed config copy and fall back to the repo copy beside the CLI.
+if [[ -n "$CHROMATICLI_MANAGED_DIR" ]]; then
+  THEMES_JSON="$THEMES_SRC"
+elif [[ -f "$CHROMATICLI_CONFIG_DIR/themes.json" ]]; then
   THEMES_JSON="$CHROMATICLI_CONFIG_DIR/themes.json"
 else
   THEMES_JSON="$THEMES_SRC"
@@ -184,9 +186,9 @@ _active_hook() {
   local s
   s="$(basename "${SHELL:-zsh}")"
   case "$s" in
-    bash) printf '%s' "$CHROMATICLI_CONFIG_DIR/hook.bash" ;;
-    fish) printf '%s' "$CHROMATICLI_CONFIG_DIR/hook.fish" ;;
-    *)    printf '%s' "$CHROMATICLI_CONFIG_DIR/hook.zsh"  ;;
+    bash) printf '%s' "$HOOK_INSTALL_DIR/hook.bash" ;;
+    fish) printf '%s' "$HOOK_INSTALL_DIR/hook.fish" ;;
+    *)    printf '%s' "$HOOK_INSTALL_DIR/hook.zsh"  ;;
   esac
 }
 
@@ -765,11 +767,9 @@ cmd_install() {
         cat <<'EOF'
 Usage: chromaticli install [--force] [--shell <zsh|bash|fish>] [--all-shells]
 
-Install chromaticli:
-  - copies the CLI to ~/.local/bin/chromaticli (so it's on $PATH)
-  - copies hook.zsh, hook.bash, hook.fish + themes.json to
-      ~/.config/chromaticli/ (or $XDG_CONFIG_HOME/chromaticli/)
-  - wires the hook into your shell's rc file
+Configure chromaticli shell integration. From a source checkout this also copies
+the CLI to ~/.local/bin and support files to ~/.config/chromaticli. A package
+manager installation uses its managed files in place.
 
 Shell auto-detection: reads $SHELL and configures that shell by default.
 
@@ -782,8 +782,8 @@ Shell auto-detection: reads $SHELL and configures that shell by default.
 Idempotent — safe to re-run. Each shell can be added independently:
   chromaticli install --shell fish   # add fish support to an existing install
 
-If ~/.local/bin is not already on $PATH, a one-line advisory is printed.
-The installer never auto-edits $PATH.
+For source installs, a one-line advisory is printed if ~/.local/bin is not on
+$PATH. The installer never auto-edits $PATH.
 
 For bash: the hook is added to ~/.bash_profile (macOS login shell default).
   If your setup only sources ~/.bashrc, add it there manually instead.
@@ -828,70 +828,76 @@ EOF
   # jq is required for the hook to function
   command -v jq >/dev/null || die "jq is required (brew install jq)"
 
+  if [[ -n "$CHROMATICLI_MANAGED_DIR" && "$CHROMATICLI_MANAGED_DIR" != /* ]]; then
+    die "CHROMATICLI_LIBEXEC must be an absolute path"
+  fi
+
   # Guard: `install` can't run from the installed binary at ~/.local/bin/chromaticli
   # because the source files (hook.zsh, themes.json, repo CLI) don't live there.
   # User must run `./chromaticli install` from the repo clone.
-  if [[ "$SCRIPT_DIR" == "$CHROMATICLI_BIN_DIR" ]]; then
+  if [[ -z "$CHROMATICLI_MANAGED_DIR" && "$SCRIPT_DIR" == "$CHROMATICLI_BIN_DIR" ]]; then
     err "cannot run \`install\` from the installed binary at $CHROMATICLI_BIN."
     err "There are no source files to install from here."
     err "Run \`./chromaticli install\` from the repo clone instead (e.g. ~/dev/chromaticli)."
     exit 1
   fi
 
-  # Validate source files exist in the repo
+  # Validate source files exist in the repo or package-managed support directory.
   [[ -f "$HOOK_ZSH_SRC"  ]] || die "hook.zsh not found at $HOOK_ZSH_SRC"
   [[ -f "$HOOK_BASH_SRC" ]] || die "hook.bash not found at $HOOK_BASH_SRC"
   [[ -f "$HOOK_FISH_SRC" ]] || die "hook.fish not found at $HOOK_FISH_SRC"
   [[ -f "$THEMES_SRC"    ]] || die "themes.json not found at $THEMES_SRC"
-  [[ -f "$CLI_SRC"       ]] || die "chromaticli CLI not found at $CLI_SRC"
+  [[ -n "$CHROMATICLI_MANAGED_DIR" || -f "$CLI_SRC" ]] || die "chromaticli CLI not found at $CLI_SRC"
 
-  # Create config dir
-  mkdir -p "$CHROMATICLI_CONFIG_DIR"
+  if [[ -z "$CHROMATICLI_MANAGED_DIR" ]]; then
+    # Create config dir
+    mkdir -p "$CHROMATICLI_CONFIG_DIR"
 
-  # Copy all three hook files regardless of which shell(s) are being wired
-  local s src dest
-  for s in zsh bash fish; do
-    case "$s" in
-      zsh)  src="$HOOK_ZSH_SRC"  ;;
-      bash) src="$HOOK_BASH_SRC" ;;
-      fish) src="$HOOK_FISH_SRC" ;;
-    esac
-    dest="$CHROMATICLI_CONFIG_DIR/hook.$s"
-    if [[ ! -f "$dest" || "$force" == "1" ]]; then
-      cp "$src" "$dest"
-      echo "installed: $dest"
-    else
-      echo "already present: $dest (use --force to overwrite)"
-    fi
-  done
-
-  if [[ ! -f "$CHROMATICLI_CONFIG_DIR/themes.json" || "$force" == "1" ]]; then
-    cp "$THEMES_SRC" "$CHROMATICLI_CONFIG_DIR/themes.json"
-    echo "installed: $CHROMATICLI_CONFIG_DIR/themes.json"
-  else
-    echo "already present: $CHROMATICLI_CONFIG_DIR/themes.json (use --force to overwrite)"
-  fi
-
-  # Copy the CLI binary itself to ~/.local/bin/chromaticli.
-  # Identity-check any existing file at that path: refuse to clobber an
-  # unrelated tool that happens to share the name (even with --force).
-  mkdir -p "$CHROMATICLI_BIN_DIR"
-  if [[ -e "$CHROMATICLI_BIN" ]]; then
-    if _chromaticli_is_ours "$CHROMATICLI_BIN"; then
-      if [[ "$force" == "1" ]]; then
-        cp "$CLI_SRC" "$CHROMATICLI_BIN"
-        chmod +x "$CHROMATICLI_BIN"
-        echo "installed: $CHROMATICLI_BIN (overwritten)"
+    # Copy all three hook files regardless of which shell(s) are being wired
+    local s src dest
+    for s in zsh bash fish; do
+      case "$s" in
+        zsh)  src="$HOOK_ZSH_SRC"  ;;
+        bash) src="$HOOK_BASH_SRC" ;;
+        fish) src="$HOOK_FISH_SRC" ;;
+      esac
+      dest="$CHROMATICLI_CONFIG_DIR/hook.$s"
+      if [[ ! -f "$dest" || "$force" == "1" ]]; then
+        cp "$src" "$dest"
+        echo "installed: $dest"
       else
-        echo "already present: $CHROMATICLI_BIN (use --force to overwrite)"
+        echo "already present: $dest (use --force to overwrite)"
+      fi
+    done
+
+    if [[ ! -f "$CHROMATICLI_CONFIG_DIR/themes.json" || "$force" == "1" ]]; then
+      cp "$THEMES_SRC" "$CHROMATICLI_CONFIG_DIR/themes.json"
+      echo "installed: $CHROMATICLI_CONFIG_DIR/themes.json"
+    else
+      echo "already present: $CHROMATICLI_CONFIG_DIR/themes.json (use --force to overwrite)"
+    fi
+
+    # Copy the CLI binary itself to ~/.local/bin/chromaticli.
+    # Identity-check any existing file at that path: refuse to clobber an
+    # unrelated tool that happens to share the name (even with --force).
+    mkdir -p "$CHROMATICLI_BIN_DIR"
+    if [[ -e "$CHROMATICLI_BIN" ]]; then
+      if _chromaticli_is_ours "$CHROMATICLI_BIN"; then
+        if [[ "$force" == "1" ]]; then
+          cp "$CLI_SRC" "$CHROMATICLI_BIN"
+          chmod +x "$CHROMATICLI_BIN"
+          echo "installed: $CHROMATICLI_BIN (overwritten)"
+        else
+          echo "already present: $CHROMATICLI_BIN (use --force to overwrite)"
+        fi
+      else
+        die "refusing to overwrite $CHROMATICLI_BIN: file exists but does not look like chromaticli (signature comment missing). Remove it manually and re-run."
       fi
     else
-      die "refusing to overwrite $CHROMATICLI_BIN: file exists but does not look like chromaticli (signature comment missing). Remove it manually and re-run."
+      cp "$CLI_SRC" "$CHROMATICLI_BIN"
+      chmod +x "$CHROMATICLI_BIN"
+      echo "installed: $CHROMATICLI_BIN"
     fi
-  else
-    cp "$CLI_SRC" "$CHROMATICLI_BIN"
-    chmod +x "$CHROMATICLI_BIN"
-    echo "installed: $CHROMATICLI_BIN"
   fi
 
   # Wire rc files for selected shells
@@ -903,7 +909,7 @@ EOF
     esac
   done
 
-  _print_path_advisory
+  [[ -n "$CHROMATICLI_MANAGED_DIR" ]] || _print_path_advisory
   _print_new_shell_hint "${shells[@]}"
 }
 
@@ -942,14 +948,14 @@ _install_rc_text() {
 _install_rc_zsh() {
   local force="$1"
   mkdir -p "$(dirname "$ZSHRC")"
-  _install_rc_text "$force" "$ZSHRC" "source \"$CHROMATICLI_CONFIG_DIR/hook.zsh\""
+  _install_rc_text "$force" "$ZSHRC" "source \"$HOOK_INSTALL_DIR/hook.zsh\""
 }
 
 _install_rc_bash() {
   local force="$1"
   local is_new=0
   grep -Fq "# chromaticli" "$BASH_PROFILE" 2>/dev/null || is_new=1
-  _install_rc_text "$force" "$BASH_PROFILE" "source \"$CHROMATICLI_CONFIG_DIR/hook.bash\""
+  _install_rc_text "$force" "$BASH_PROFILE" "source \"$HOOK_INSTALL_DIR/hook.bash\""
   if (( is_new )); then
     echo "Note: hook added to ~/.bash_profile (macOS login shell default)."
     echo "      If your setup only sources ~/.bashrc, add it there manually instead."
@@ -970,7 +976,7 @@ _install_rc_fish() {
     fi
   fi
   printf '# chromaticli — auto-pair terminal colors to .vscode/settings.json\n' > "$FISH_SHIM"
-  printf 'source "%s/hook.fish"\n' "$CHROMATICLI_CONFIG_DIR" >> "$FISH_SHIM"
+  printf 'source "%s/hook.fish"\n' "$HOOK_INSTALL_DIR" >> "$FISH_SHIM"
   echo "installed: $FISH_SHIM"
 }
 

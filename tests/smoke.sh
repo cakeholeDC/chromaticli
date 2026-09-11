@@ -18,7 +18,8 @@ _default_cli="$(cd "$(dirname "$0")/.." && pwd)/chromaticli"
 CHROMATICLI="${CHROMATICLI:-$_default_cli}"
 PROJECT=$(mktemp -d)
 TESTHOME=$(mktemp -d)
-trap 'rm -rf "$PROJECT" "$TESTHOME"' EXIT
+MANAGED_LIBEXEC=$(mktemp -d)
+trap 'rm -rf "$PROJECT" "$TESTHOME" "$MANAGED_LIBEXEC"' EXIT
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 pass() { echo "  ok  $*"; }
@@ -290,6 +291,41 @@ fi
 grep -Fq "# chromaticli" "$TESTHOME/.bash_profile" \
   || fail "--all-shells did not wire .bash_profile"
 pass "install --all-shells wires available shells"
+
+echo ""
+echo "=== package-managed install uses support files in place ==="
+
+REPO_ROOT=$(dirname "$CHROMATICLI")
+cp "$CHROMATICLI" "$REPO_ROOT/hook.zsh" "$REPO_ROOT/hook.bash" \
+  "$REPO_ROOT/hook.fish" "$REPO_ROOT/themes.json" "$MANAGED_LIBEXEC/"
+chmod +x "$MANAGED_LIBEXEC/chromaticli"
+rm -rf "$TESTHOME"
+TESTHOME=$(mktemp -d)
+[[ $(CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" "$MANAGED_LIBEXEC/chromaticli" --version) == "chromaticli $EXPECTED_VERSION" ]] \
+  || fail "package-managed CLI reported the wrong version"
+CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" HOME="$TESTHOME" ZDOTDIR="$TESTHOME" \
+  "$MANAGED_LIBEXEC/chromaticli" install --shell zsh --force > /dev/null 2>&1 \
+  || fail "package-managed install exited nonzero"
+[[ ! -e "$TESTHOME/.local/bin/chromaticli" ]] \
+  || fail "package-managed install copied the CLI to ~/.local/bin"
+[[ ! -d "$TESTHOME/.config/chromaticli" ]] \
+  || fail "package-managed install copied support files to ~/.config"
+grep -Fq "source \"$MANAGED_LIBEXEC/hook.zsh\"" "$TESTHOME/.zshrc" \
+  || fail "package-managed install did not wire the managed hook path"
+CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" HOME="$TESTHOME" \
+  "$MANAGED_LIBEXEC/chromaticli" list > /dev/null \
+  || fail "package-managed CLI could not read managed themes.json"
+CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" SHELL=zsh HOME="$TESTHOME" \
+  "$MANAGED_LIBEXEC/chromaticli" preview monokai > /dev/null 2>&1 \
+  || fail "package-managed CLI could not resolve the managed hook"
+CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" HOME="$TESTHOME" ZDOTDIR="$TESTHOME" \
+  "$MANAGED_LIBEXEC/chromaticli" uninstall > /dev/null 2>&1 \
+  || fail "package-managed uninstall exited nonzero"
+[[ -f "$MANAGED_LIBEXEC/chromaticli" && -f "$MANAGED_LIBEXEC/hook.zsh" ]] \
+  || fail "package-managed uninstall removed package-owned files"
+grep -Fq "# chromaticli" "$TESTHOME/.zshrc" 2>/dev/null \
+  && fail "package-managed uninstall left the zsh rc block"
+pass "package-managed install and uninstall preserve package-owned files"
 
 echo ""
 echo "=== hook.bash prepends to PROMPT_COMMAND without clobbering ==="
