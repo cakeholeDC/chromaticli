@@ -62,7 +62,7 @@ These are optional helpers for a better developer experience.
 
 ### Homebrew tap
 
-After the first release is published, install from the project tap:
+Install from the project tap:
 
 ```sh
 brew install cakeholeDC/tap/chromaticli
@@ -111,7 +111,16 @@ cd ~/some-project          # terminal repaints automatically
 
 ## Upgrade
 
-If you update the repo, reinstall to refresh the installed copies:
+### Homebrew
+
+```sh
+brew update
+brew upgrade chromaticli
+```
+
+### Source checkout
+
+Pull the latest changes and reinstall to refresh the installed copies:
 
 ```sh
 cd ~/dev/chromaticli
@@ -146,7 +155,7 @@ Skipping `chromaticli uninstall` leaves a source line in your shell rc that poin
 
 ---
 
-`chromaticli uninstall` removes:
+`chromaticli uninstall` removes shell integration and these source-installation files when present:
 
 - `~/.local/bin/chromaticli`
 - `~/.config/chromaticli/`
