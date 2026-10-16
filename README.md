@@ -1,4 +1,4 @@
-# ChromatiCLI
+# chromaticli
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/cakeholeDC/chromaticli/actions/workflows/ci.yml/badge.svg)](https://github.com/cakeholeDC/chromaticli/actions/workflows/ci.yml)
@@ -9,7 +9,7 @@
   pronounced <em>chromatically</em> (/kroʊˈmæ.tɪ.kli/).
 </p>
 
-ChromatiCLI makes your terminal match the VS Code theme for the project you are in. When you `cd` into a folder with `.vscode/settings.json`, it reads `workbench.colorTheme` and repaints your terminal automatically.
+<strong><em>chromaticli</em></strong> makes your terminal match the VS Code theme for the project you are in. When you `cd` into a folder with `.vscode/settings.json`, it reads `workbench.colorTheme` and repaints your terminal automatically.
 
 It works with iTerm2, Terminal.app, Alacritty, Kitty, and any terminal that supports OSC color sequences.
 
@@ -17,7 +17,7 @@ It works with iTerm2, Terminal.app, Alacritty, Kitty, and any terminal that supp
 
 ---
 
-## Why ChromatiCLI
+## Why chromaticli
 
 - Helps you tell terminal sessions apart visually.
 - Keeps terminal colors aligned with your VS Code workspace theme.
@@ -210,7 +210,7 @@ For light/dark pairs, the hook also re-checks macOS appearance and reapplies col
 
 ## Themes
 
-ChromatiCLI includes 12 curated themes and 2 light/dark pairs.
+chromaticli includes 12 curated themes and 2 light/dark pairs.
 
 - Dark warm/earthy: `grass`, `kimbie-dark`, `monokai`, `red-sands`
 - Dark cool/blue: `abyss`, `dark-modern`, `dark-pink`, `ocean`, `purple-rain`, `solarized-dark`
