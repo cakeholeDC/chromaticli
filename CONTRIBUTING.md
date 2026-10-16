@@ -69,8 +69,8 @@ adds a distinct color identity:
 
 1. Edit `themes.json` — add your entry alphabetically by id.
 2. Run `python3 scripts/verify-themes.py` — must exit 0.
-3. Run `python3 scripts/generate-preview.py` — regenerates SVG/HTML/MD previews.
-4. Commit `themes.json` and the regenerated preview files together.
+3. Run `python3 scripts/generate-preview.py` — regenerates the shared SVG previews, docs galleries, and website gallery.
+4. Commit `themes.json` and all regenerated preview files together. The SVGs live once under `web/public/gallery/themes/` and are referenced by both docs galleries and the website.
 
 CI enforces both steps; a PR that fails either job will not be merged.
 

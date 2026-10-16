@@ -319,5 +319,4 @@ Release Please turns those commits into a changelog and release pull request. Me
 /docs/
   theme_preview.md    theme gallery for GitHub
   theme_preview.html  standalone preview page
-  themes/*.svg        per-theme mock-terminal previews
 ```
