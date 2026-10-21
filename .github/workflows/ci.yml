@@ -56,8 +56,15 @@ jobs:
       - name: Lint — preview artifacts must match themes.json
         # If any preview file would differ, the diff exit code is nonzero
         # and CI fails with the diff inline. Fix locally by re-running the
-        # generator and committing the regenerated artifacts.
-        run: git diff --exit-code docs/themes/ docs/theme_preview.html docs/theme_preview.md
+        # generator and committing the regenerated artifacts. Also catch newly
+        # generated SVGs, which git diff ignores until they are tracked.
+        run: |
+          git diff --exit-code -- docs/theme_preview.html docs/theme_preview.md web/gallery/index.html web/public/gallery/
+          untracked_previews=$(git ls-files --others --exclude-standard -- web/gallery/index.html web/public/gallery/)
+          if [ -n "$untracked_previews" ]; then
+            printf 'Untracked generated previews:\n%s\n' "$untracked_previews"
+            exit 1
+          fi
 
   verify-themes:
     runs-on: ubuntu-latest

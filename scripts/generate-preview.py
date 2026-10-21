@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # chromaticli :: generate-preview.py
 # Reads themes.json and emits:
-#   docs/themes/<theme-id>.svg     — mock-terminal preview per theme
+#   web/public/gallery/themes/ — mock-terminal preview per theme (shared)
 #   docs/theme_preview.html        — local-file gallery
 #   docs/theme_preview.md          — GitHub-renderable gallery (same SVGs)
+#   web/gallery/index.html      — Vite entry for the website gallery
 #
 # Run after adding/changing any entry under `.themes` in themes.json.
-# CI lint gate: `git diff --exit-code docs/themes/ docs/theme_preview.html docs/theme_preview.md`
-# fails if a themes.json edit landed without regenerating these artifacts.
+# CI checks both galleries for stale or missing generated artifacts.
 
 from __future__ import annotations
 
@@ -17,9 +17,11 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 THEMES = ROOT / "themes.json"
-OUT_DIR = ROOT / "docs" / "themes"
 HTML_PATH = ROOT / "docs" / "theme_preview.html"
 MD_PATH = ROOT / "docs" / "theme_preview.md"
+SITE_DIR = ROOT / "web" / "public" / "gallery"
+SITE_THEMES_DIR = SITE_DIR / "themes"
+SITE_HTML_PATH = ROOT / "web" / "gallery" / "index.html"
 
 W, H = 280, 170
 TITLE_H = 24
@@ -96,7 +98,7 @@ def esc(s: str) -> str:
 def html_doc(ids: list[str]) -> str:
     cards = "\n".join(
         f'''    <figure class="card">
-      <img src="themes/{tid}.svg" alt="{esc(tid)}" loading="lazy"/>
+      <img src="../web/public/gallery/themes/{tid}.svg" alt="{esc(tid)}" loading="lazy"/>
       <figcaption><code>{esc(tid)}</code></figcaption>
     </figure>'''
         for tid in ids
@@ -137,6 +139,24 @@ def html_doc(ids: list[str]) -> str:
 """
 
 
+def site_html_doc() -> str:
+    return """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Browse chromaticli's built-in terminal themes." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>chromaticli — themes</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/gallery-main.jsx"></script>
+  </body>
+</html>
+"""
+
+
 def md_doc(themes_data: dict, pairs_data: dict) -> str:
     # Bucket by `category`, alphabetize within each. The order of buckets is fixed.
     BUCKETS = [
@@ -146,7 +166,7 @@ def md_doc(themes_data: dict, pairs_data: dict) -> str:
     ]
 
     def cell(tid: str) -> str:
-        return (f'<img src="themes/{tid}.svg" width="240" alt="{esc(tid)}"/><br/>'
+        return (f'<img src="../web/public/gallery/themes/{tid}.svg" width="240" alt="{esc(tid)}"/><br/>'
                 f'<code>{esc(tid)}</code>')
 
     def grid_3col(ids: list[str]) -> str:
@@ -202,26 +222,30 @@ def main() -> int:
     data = json.loads(THEMES.read_text())
     themes = data["themes"]
     pairs = data.get("pairs", {})
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    SITE_THEMES_DIR.mkdir(parents=True, exist_ok=True)
 
     ids = list(themes.keys())
 
     for tid, t in themes.items():
-        (OUT_DIR / f"{tid}.svg").write_text(svg(tid, t["palette"]))
+        preview = svg(tid, t["palette"])
+        (SITE_THEMES_DIR / f"{tid}.svg").write_text(preview)
 
     # Purge stale SVGs for themes that were removed from themes.json.
     expected = {f"{tid}.svg" for tid in ids}
-    for existing in OUT_DIR.iterdir():
+    for existing in SITE_THEMES_DIR.iterdir():
         if existing.name not in expected and existing.suffix == ".svg":
             existing.unlink()
             print(f"removed stale {existing.relative_to(ROOT)}")
 
     HTML_PATH.write_text(html_doc(ids))
     MD_PATH.write_text(md_doc(themes, pairs))
+    SITE_HTML_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SITE_HTML_PATH.write_text(site_html_doc())
 
-    print(f"wrote {len(ids)} svgs to {OUT_DIR.relative_to(ROOT)}")
+    print(f"wrote {len(ids)} shared svgs to {SITE_THEMES_DIR.relative_to(ROOT)}")
     print(f"wrote {HTML_PATH.relative_to(ROOT)}")
     print(f"wrote {MD_PATH.relative_to(ROOT)}")
+    print(f"wrote {SITE_HTML_PATH.relative_to(ROOT)}")
     return 0
 
 
