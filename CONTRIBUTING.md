@@ -67,16 +67,30 @@ adds a distinct color identity:
   on their own line; the 16-entry `ansi` array split into two lines of 8
   entries.
 
-1. Edit `themes.json` — add your entry alphabetically by id, and add its
-   original editor definition under `vscode-extension/themes/`.
-2. Run `python3 scripts/generate-vscode-themes.py` to copy terminal colors into the editor themes.
-3. Run `./scripts/update-vsix.sh` to rebuild the repository's VSIX from the extension sources.
-4. Run `python3 scripts/verify-themes.py` and `python3 tests/verify-bundled-themes.py`; both must exit 0.
-5. Run `python3 scripts/generate-preview.py` — regenerates the shared SVG previews, docs galleries, and website gallery.
-6. Commit the matching `themes.json`, extension sources, regenerated VSIX, and preview files together. The SVGs live once under `web/public/gallery/themes/` and are referenced by both docs galleries and the website.
+The CLI and bundled VS Code extension have independent versions. Follow these
+four steps whenever packaged extension content changes, including theme files,
+non-version manifest fields, `vscode-extension/README.md`, or its license.
+A CLI-only change does not require an extension version bump or VSIX rebuild.
 
-CI enforces registry verification and preview freshness; a PR that fails either
-job will not be merged.
+1. Edit `themes.json` as needed, keeping entries alphabetical, and edit the
+   original editor definitions under `vscode-extension/themes/`.
+2. Manually increase `version` in `vscode-extension/package.json`. Every
+   packaged-content change needs a higher extension version, even when the CLI
+   version stays the same. Do not rebuild changed content under the old version.
+3. Run `python3 scripts/generate-vscode-themes.py`, then
+   `./scripts/update-vsix.sh`. The script writes
+   `vscode-extension/chromaticli-themes-<version>.vsix` using the manifest
+   version. Remove the previously tracked VSIX when its version changes.
+4. Run `python3 scripts/verify-themes.py`,
+   `python3 tests/verify-bundled-themes.py`, and
+   `python3 scripts/generate-preview.py`, in that order. Review the diff and
+   commit the matching registry, editor sources, manifest, new VSIX, and
+   previews together. The SVGs live under `web/public/gallery/themes/` and
+   are referenced by both docs galleries and the website.
+
+CI checks registry verification, preview freshness, and extension version and
+VSIX consistency. Add the `bundled-vsix` job to branch protection's required
+checks before the next release so a failing bundle check blocks merges.
 
 ## Adding a shell
 
