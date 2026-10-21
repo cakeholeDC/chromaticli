@@ -32,7 +32,9 @@ assert len(manifest["contributes"]["themes"]) == len(themes)
 vsix_path = root / f"vscode-extension/chromaticli-themes-{manifest['version']}.vsix"
 with ZipFile(vsix_path) as vsix:
     archived_manifest = json.loads(vsix.read("extension/package.json"))
-    assert archived_manifest["version"] == manifest["version"]
+    assert archived_manifest == manifest
+    assert vsix.read("extension/readme.md") == (root / "vscode-extension/README.md").read_bytes()
+    assert vsix.read("extension/LICENSE.txt") == (root / "vscode-extension/LICENSE").read_bytes()
     archived_themes = {
         path.removeprefix("extension/themes/").removesuffix(".json")
         for path in vsix.namelist()

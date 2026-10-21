@@ -79,6 +79,25 @@ jobs:
         # Exits 1 on any mismatch — typo, removed extension, drifted label.
         run: python3 scripts/verify-themes.py
 
+  bundled-vsix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check extension version and tracked VSIX
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 -m unittest discover -s tests -p 'test_check_vsix_version.py'
+          python3 scripts/check-vsix-version.py "$BASE_SHA"
+
+      - name: Check generated terminal colors and bundle contents
+        run: |
+          python3 scripts/generate-vscode-themes.py --check
+          python3 tests/verify-bundled-themes.py
+
   smoke:
     runs-on: ubuntu-latest
     steps:
