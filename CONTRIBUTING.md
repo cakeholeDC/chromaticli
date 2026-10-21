@@ -55,9 +55,9 @@ version 1.0, breaking changes bump the minor version.
 The registry is curated, not exhaustive. Before adding a theme, check that it
 adds a distinct color identity:
 
-- Prefer VS Code built-ins (`vscode.extension_id: null`). They have no
-  marketplace dependency, no install step, and cannot drift across extension
-  versions.
+- Add the theme to the local theme-only VS Code extension. Keep its picker
+  label as `chromaticli <color-id>` and generate integrated-terminal colors
+  from `themes.json`; do not add a Marketplace dependency for a bundled theme.
 - Use one representative per color identity. If a new theme is visually close to
   an existing entry, it probably weakens the registry.
 - Removing is allowed. If a new theme supersedes an existing entry, drop the
@@ -67,12 +67,16 @@ adds a distinct color identity:
   on their own line; the 16-entry `ansi` array split into two lines of 8
   entries.
 
-1. Edit `themes.json` — add your entry alphabetically by id.
-2. Run `python3 scripts/verify-themes.py` — must exit 0.
-3. Run `python3 scripts/generate-preview.py` — regenerates the shared SVG previews, docs galleries, and website gallery.
-4. Commit `themes.json` and all regenerated preview files together. The SVGs live once under `web/public/gallery/themes/` and are referenced by both docs galleries and the website.
+1. Edit `themes.json` — add your entry alphabetically by id, and add its
+   original editor definition under `vscode-extension/themes/`.
+2. Run `python3 scripts/generate-vscode-themes.py` to copy terminal colors into the editor themes.
+3. Run `./scripts/update-vsix.sh` to rebuild the repository's VSIX from the extension sources.
+4. Run `python3 scripts/verify-themes.py` and `python3 tests/verify-bundled-themes.py`; both must exit 0.
+5. Run `python3 scripts/generate-preview.py` — regenerates the shared SVG previews, docs galleries, and website gallery.
+6. Commit the matching `themes.json`, extension sources, regenerated VSIX, and preview files together. The SVGs live once under `web/public/gallery/themes/` and are referenced by both docs galleries and the website.
 
-CI enforces both steps; a PR that fails either job will not be merged.
+CI enforces registry verification and preview freshness; a PR that fails either
+job will not be merged.
 
 ## Adding a shell
 

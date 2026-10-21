@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="170" viewBox="0 0 280 170">
+  <!-- body -->
+  <rect width="280" height="170" rx="8" fill="#13773d"/>
+  <!-- title bar (translucent dark overlay on bg) -->
+  <rect width="280" height="24" rx="8" fill="#000000" fill-opacity="0.28"/>
+  <rect y="16" width="280" height="8" fill="#000000" fill-opacity="0.28"/>
+  <!-- traffic lights -->
+  <circle cx="12" cy="12.0" r="5" fill="#ff5f57"/>
+  <circle cx="28" cy="12.0" r="5" fill="#febc2e"/>
+  <circle cx="44" cy="12.0" r="5" fill="#28c840"/>
+  <!-- title -->
+  <text x="140.0" y="17" fill="#b6ffd5" opacity="0.75" font-size="11"
+        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">green</text>
+  <text x="10" y="40" fill="#b6ffd5" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ git status</text>
+  <text x="10" y="54" fill="#f4fff8" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">On branch main</text>
+  <text x="10" y="68" fill="#ffe18f" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  modified: README.md</text>
+  <text x="10" y="82" fill="#a5efb2" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  new:      theme_preview.html</text>
+  <text x="10" y="96" fill="#ffada6" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  deleted:  old.py</text>
+  <text x="10" y="110" fill="#9bc7ff" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ echo $SHELL</text>
+  <text x="10" y="124" fill="#b6ffd5" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/bin/zsh</text>
+  <!-- cursor block at end of last line -->
+  <rect x="66" y="114" width="6" height="12" fill="#005825" opacity="0.85"/>
+  <rect x="10.00" y="156" width="15.25" height="8" fill="#000000"/>
+  <rect x="26.25" y="156" width="15.25" height="8" fill="#ffada6"/>
+  <rect x="42.50" y="156" width="15.25" height="8" fill="#a5efb2"/>
+  <rect x="58.75" y="156" width="15.25" height="8" fill="#ffe18f"/>
+  <rect x="75.00" y="156" width="15.25" height="8" fill="#9bc7ff"/>
+  <rect x="91.25" y="156" width="15.25" height="8" fill="#edafe4"/>
+  <rect x="107.50" y="156" width="15.25" height="8" fill="#89e8e4"/>
+  <rect x="123.75" y="156" width="15.25" height="8" fill="#f4fff8"/>
+  <rect x="140.00" y="156" width="15.25" height="8" fill="#555555"/>
+  <rect x="156.25" y="156" width="15.25" height="8" fill="#ffc0b7"/>
+  <rect x="172.50" y="156" width="15.25" height="8" fill="#b9f6c2"/>
+  <rect x="188.75" y="156" width="15.25" height="8" fill="#fff0ad"/>
+  <rect x="205.00" y="156" width="15.25" height="8" fill="#b8d9ff"/>
+  <rect x="221.25" y="156" width="15.25" height="8" fill="#f6c4ef"/>
+  <rect x="237.50" y="156" width="15.25" height="8" fill="#a5f2ef"/>
+  <rect x="253.75" y="156" width="15.25" height="8" fill="#ffffff"/>
+</svg>

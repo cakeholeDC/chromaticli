@@ -74,6 +74,16 @@ NOTE: /Users/<you>/.local/bin is not on your $PATH.
 Add that line if shown, then start a new shell session (or run `exec zsh`,
 `exec bash`, or `exec fish`) to pick it up.
 
+After shell setup, if `code` is available, install also reports:
+
+```
+installing bundled VS Code themes: /Users/<you>/.config/chromaticli/vscode-extension/chromaticli-themes-0.0.1.vsix
+installed VS Code themes: chromaticli.chromaticli-themes@0.0.1
+```
+
+If `code` is unavailable, the shell setup remains usable and the command
+prints instructions for installing the bundled VSIX later.
+
 Verify the CLI is now on `$PATH`:
 
 ```sh
@@ -134,8 +144,8 @@ which _chromaticli_apply
 chromaticli list
 ```
 
-**Expected:** Categorized output with three sections (Dark — warm / earthy,
-Dark — cool / blue, Light). Each entry is numbered and shows two adjacent
+**Expected:** Categorized output with four sections (Core, Light, Dark, Defaults).
+Each entry is numbered and shows two adjacent
 color strips:
 
 1. **4 swatches** of the theme's background color (so the eye sees "this is
@@ -143,24 +153,24 @@ color strips:
 2. a single uncolored space (terminal default — gives a visible gap)
 3. the **16 ANSI palette** swatches
 
-A final "Pairs" section lists `default` and `solarized` (pair entries have
-no swatches — they show their light/dark theme members instead). Themes are
-numbered 1–12; pairs 13–14.
+A final "Pairs" section lists `default` and the seven color pairs (pair entries have
+no swatches: they show their light/dark theme members instead). There are 23
+bundled color themes; numbering follows the displayed category order, so use
+theme IDs rather than relying on a number.
 
 Example excerpt (colors render as blocks in a color-capable terminal — the
 wider left block is the bg color, narrower right strip is the palette):
 ```
-── Dark — warm / earthy ──────────────────────────────────────
+── Core ──────────────────────────────────────────────────────
 
- 1. grass                ████████ ████████████████████████████████
- 2. kimbie-dark          ████████ ████████████████████████████████
- 3. monokai              ████████ ████████████████████████████████
- 4. red-sands            ████████ ████████████████████████████████
+ 1. red                  ████████ ████████████████████████████████
+ 2. orange               ████████ ████████████████████████████████
+ 3. yellow               ████████ ████████████████████████████████
 ...
 ── Pairs (auto light/dark) ───────────────────────────────────
 
-13. default              (light: light-modern ↔ dark: dark-modern)
-14. solarized            (light: solarized-light ↔ dark: solarized-dark)
+24. default              (light: light ↔ dark: dark)
+29. blue-pair            (light: light-blue ↔ dark: dark-blue)
 ```
 
 ---
@@ -172,7 +182,7 @@ Create a test project and set a theme:
 ```sh
 mkdir -p /tmp/myproject
 cd /tmp/myproject
-chromaticli set monokai
+chromaticli set dark-green
 ```
 
 **Expected:**
@@ -189,12 +199,12 @@ cat .vscode/settings.json
 **Expected:**
 ```json
 {
-  "workbench.colorTheme": "Monokai"
+  "workbench.colorTheme": "chromaticli dark-green"
 }
 ```
 
-The terminal should repaint to monokai's warm dark palette (yellow-green text
-on dark gray background, magenta/green/yellow ANSI colors).
+The terminal should repaint to dark-green's palette. The VS Code picker should
+offer `chromaticli dark-green` after the local theme VSIX is installed.
 
 ---
 
@@ -206,13 +216,13 @@ In the same shell (hook must be loaded):
 cd /tmp
 ```
 
-**Expected:** Terminal resets to your profile's default colors (no monokai).
+**Expected:** Terminal resets to your profile's default colors (no active theme).
 
 ```sh
 cd /tmp/myproject
 ```
 
-**Expected:** Terminal repaints to monokai again, no visible flicker.
+**Expected:** Terminal repaints to dark-green again, no visible flicker.
 
 Check `_CHROMATICLI_ACTIVE`:
 
@@ -220,14 +230,14 @@ Check `_CHROMATICLI_ACTIVE`:
 echo $_CHROMATICLI_ACTIVE
 ```
 
-**Expected:** `monokai`
+**Expected:** `dark-green`
 
 ---
 
 ## Step 7 — Set a light/dark pair
 
 ```sh
-chromaticli set --pair solarized
+chromaticli set --pair blue-pair
 ```
 
 **Expected:**
@@ -245,13 +255,13 @@ cat .vscode/settings.json
 ```json
 {
   "window.autoDetectColorScheme": true,
-  "workbench.preferredLightColorTheme": "Solarized Light",
-  "workbench.preferredDarkColorTheme": "Solarized Dark"
+  "workbench.preferredLightColorTheme": "chromaticli light-blue",
+  "workbench.preferredDarkColorTheme": "chromaticli dark-blue"
 }
 ```
 
-The terminal should display solarized-light in Light mode and solarized-dark in
-Dark mode. Toggle macOS Appearance (System Settings → Appearance) and switch
+The terminal should display light-blue in Light mode and dark-blue in Dark
+mode. Toggle macOS Appearance (System Settings → Appearance) and switch
 between Light and Dark — the terminal should flip automatically within one
 prompt cycle.
 
@@ -366,10 +376,10 @@ Re-running uninstall should be idempotent (no-op):
 | Bad number | `chromaticli set 99` | Exit 2, "unknown theme/pair/number" error |
 | Unset with no settings | `chromaticli unset --project /tmp` | "no theme set for this directory", exit 0 |
 | Install idempotent | Run `chromaticli install` twice | No duplicate source block in `.zshrc` |
-| --no-install flag | `chromaticli set dark-pink --no-install` | Writes settings.json + extensions.json, skips `code --install-extension` |
+| --no-install flag | `chromaticli set dark-pink --no-install` | Writes settings.json, skips `code --install-extension`, and reports VS Code may not load the theme |
 | Uninstall idempotent | Run `chromaticli uninstall` twice | Second run reports `not present` for each removed item, exit 0 |
 | Foreign binary at install path | `echo '#!/bin/sh' > ~/.local/bin/chromaticli; chmod +x ~/.local/bin/chromaticli; ./chromaticli install` | Exit 1, error: "refusing to overwrite ... signature comment missing". Bin is preserved. |
 | Foreign binary at uninstall path | (same setup) then `chromaticli uninstall` | Refuses to remove the foreign file (warns), proceeds with the rest of uninstall |
-| Sync idempotence regression (Q4.9 guard) | From a themed dir, run `chromaticli set monokai` twice in a row | Terminal visibly repaints **both** times. A silent second invocation means the `unset _CHROMATICLI_ACTIVE` bypass in `cmd_sync`'s zsh subshell has regressed. |
+| Sync idempotence regression (Q4.9 guard) | From a themed dir, run `chromaticli set dark-green` twice in a row | Terminal visibly repaints **both** times. A silent second invocation means the `unset _CHROMATICLI_ACTIVE` bypass in `cmd_sync`'s zsh subshell has regressed. |
 | `--shell` and `--all-shells` together | `chromaticli install --shell zsh --all-shells` | Exit 2, "mutually exclusive" error |
 | bash-only install | `chromaticli install --shell bash`, then `grep "# chromaticli" ~/.bash_profile` | Marker present in `.bash_profile`; `.zshrc` unchanged |

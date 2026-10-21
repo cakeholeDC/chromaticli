@@ -9,17 +9,17 @@
   <circle cx="28" cy="12.0" r="5" fill="#febc2e"/>
   <circle cx="44" cy="12.0" r="5" fill="#28c840"/>
   <!-- title -->
-  <text x="140.0" y="17" fill="#3b3b3b" opacity="0.75" font-size="11"
-        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">light-modern</text>
-  <text x="10" y="40" fill="#3b3b3b" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ git status</text>
+  <text x="140.0" y="17" fill="#1d1d1f" opacity="0.75" font-size="11"
+        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">light</text>
+  <text x="10" y="40" fill="#1d1d1f" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ git status</text>
   <text x="10" y="54" fill="#555555" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">On branch main</text>
   <text x="10" y="68" fill="#949800" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  modified: README.md</text>
   <text x="10" y="82" fill="#00bc00" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  new:      theme_preview.html</text>
   <text x="10" y="96" fill="#cd3131" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  deleted:  old.py</text>
   <text x="10" y="110" fill="#0451a5" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ echo $SHELL</text>
-  <text x="10" y="124" fill="#3b3b3b" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/bin/zsh</text>
+  <text x="10" y="124" fill="#1d1d1f" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/bin/zsh</text>
   <!-- cursor block at end of last line -->
-  <rect x="66" y="114" width="6" height="12" fill="#005fb8" opacity="0.85"/>
+  <rect x="66" y="114" width="6" height="12" fill="#6e6e73" opacity="0.85"/>
   <rect x="10.00" y="156" width="15.25" height="8" fill="#000000"/>
   <rect x="26.25" y="156" width="15.25" height="8" fill="#cd3131"/>
   <rect x="42.50" y="156" width="15.25" height="8" fill="#00bc00"/>

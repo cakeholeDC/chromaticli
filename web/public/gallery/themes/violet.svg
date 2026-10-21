@@ -10,7 +10,7 @@
   <circle cx="44" cy="12.0" r="5" fill="#28c840"/>
   <!-- title -->
   <text x="140.0" y="17" fill="#fffbf6" opacity="0.75" font-size="11"
-        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">purple-rain</text>
+        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">violet</text>
   <text x="10" y="40" fill="#fffbf6" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ git status</text>
   <text x="10" y="54" fill="#ffffff" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">On branch main</text>
   <text x="10" y="68" fill="#ffc400" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  modified: README.md</text>
@@ -19,7 +19,7 @@
   <text x="10" y="110" fill="#00a2fa" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ echo $SHELL</text>
   <text x="10" y="124" fill="#fffbf6" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">/bin/zsh</text>
   <!-- cursor block at end of last line -->
-  <rect x="66" y="114" width="6" height="12" fill="#ff271d" opacity="0.85"/>
+  <rect x="66" y="114" width="6" height="12" fill="#c7c3cc" opacity="0.85"/>
   <rect x="10.00" y="156" width="15.25" height="8" fill="#000000"/>
   <rect x="26.25" y="156" width="15.25" height="8" fill="#ff260e"/>
   <rect x="42.50" y="156" width="15.25" height="8" fill="#9be205"/>

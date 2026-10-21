@@ -68,10 +68,10 @@ test('sibling project changes reset to home and restore each project theme', () 
   assert.equal(currentDemoCommand(frame, themeIds), 'cd project_1');
 });
 
-test('all themes appear in pairs before the demo repeats, without filesystem setup commands', () => {
+test('all themes appear before the demo repeats, including an odd final theme', () => {
   let frame = createDemoFrame();
   const applied = [];
-  for (let cycle = 0; cycle < themeIds.length / 2; cycle++) {
+  for (let cycle = 0; cycle < Math.ceil(themeIds.length / 2); cycle++) {
     assert.equal(demoCommands(cycle, themeIds).some((command) => command.startsWith('mkdir ')), false);
     while (frame.cycle === cycle) {
       const command = currentDemoCommand(frame, themeIds);
@@ -81,7 +81,9 @@ test('all themes appear in pairs before the demo repeats, without filesystem set
     }
   }
   assert.deepEqual(applied, themeIds);
-  assert.equal(frame.cycle, themeIds.length / 2);
+  assert.equal(frame.cycle, Math.ceil(themeIds.length / 2));
   assert.equal(currentDemoCommand(frame, themeIds), 'cd project_1');
-  assert.deepEqual(frame.assigned, [themeIds.at(-2), themeIds.at(-1)]);
+  assert.deepEqual(frame.assigned, themeIds.length % 2
+    ? [themeIds.at(-1), themeIds.at(-2)]
+    : [themeIds.at(-2), themeIds.at(-1)]);
 });

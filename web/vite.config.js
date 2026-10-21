@@ -12,7 +12,7 @@ export default defineConfig({
     rolldownOptions: {
       input: {
         main: localPath('./index.html'),
-        gallery: localPath('./gallery/index.html'),
+        themes: localPath('./themes/index.html'),
       },
     },
   },

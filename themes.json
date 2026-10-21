@@ -1,141 +1,795 @@
 {
-  "_comment": "Theme registry for chromaticli. Each `.themes.<id>` maps a chromaticli internal id to a VSCode theme (display name + extension) and a 16-color terminal palette. Palette values should match the upstream theme's canonical iTerm2 port — never hand-tune; the goal is fidelity to the editor experience. Palettes are emitted via standard OSC codes (OSC 4/10/11/12) so they apply uniformly across iTerm2, Terminal.app, Alacritty, Kitty, and any modern terminal. Editing workflow: after any change under `.themes` or `.pairs`, run (1) `python3 scripts/verify-themes.py` to confirm every `vscode.theme_id` resolves against the live VSCode marketplace or matches a known built-in, then (2) `python3 scripts/generate-preview.py` to refresh `docs/themes/*.svg`, `docs/theme_preview.html`, and `docs/theme_preview.md`. Commit themes.json and the regenerated artifacts together. CI runs both as separate jobs.",
+  "_comment": "Theme registry for chromaticli. Bundled themes use exact lowercase chromaticli <color-id> picker labels. Existing terminal RGB palettes are retained from the former upstream mappings; vscode.legacy_theme_ids recognizes those workspace labels read-only. Bundled workbench and syntax definitions are original chromaticli designs, not copies of upstream editor themes. New terminal palettes are original and may be tuned for readability and distinct color identity. themes.json owns background, foreground, cursor and all 16 ANSI colors; scripts/generate-vscode-themes.py copies them exactly into local theme files. After registry edits run python3 scripts/generate-vscode-themes.py, then python3 scripts/verify-themes.py before python3 scripts/generate-preview.py. Marketplace entries still require live verification. Keep registry and generated artifacts together.",
   "themes": {
-    "abyss": {
-      "category": "dark-cool",
-      "vscode": { "theme_id": "Abyss", "extension_id": null },
+    "blue": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli blue",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Tomorrow Night Blue"
+        ]
+      },
       "palette": {
-        "background": "#000c18", "foreground": "#6688cc", "cursor": "#ddbb88",
+        "background": "#224fbc",
+        "foreground": "#ffffff",
+        "cursor": "#7f7f7f",
         "ansi": [
-          "#111111", "#ff9da4", "#d1f1a9", "#ffeead", "#bbdaff", "#ebbbff", "#99ffff", "#cccccc",
-          "#333333", "#ff7882", "#b8f171", "#ffe580", "#80baff", "#d778ff", "#78ffff", "#ffffff"
+          "#000000",
+          "#990000",
+          "#00a600",
+          "#999900",
+          "#0000b2",
+          "#b200b2",
+          "#00a6b2",
+          "#bfbfbf",
+          "#666666",
+          "#e50000",
+          "#00d900",
+          "#e5e500",
+          "#0000ff",
+          "#e500e5",
+          "#00e5e5",
+          "#e5e5e5"
         ]
       }
     },
-    "dark-modern": {
-      "category": "dark-cool",
-      "vscode": { "theme_id": "Default Dark Modern", "extension_id": null },
+    "dark": {
+      "category": "defaults",
+      "vscode": {
+        "theme_id": "chromaticli dark",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Default Dark Modern"
+        ]
+      },
       "palette": {
-        "background": "#1f1f1f", "foreground": "#cccccc", "cursor": "#cccccc",
+        "background": "#1c1c1e",
+        "foreground": "#f5f5f7",
+        "cursor": "#b8b8bd",
         "ansi": [
-          "#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
-          "#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+          "#000000",
+          "#cd3131",
+          "#0dbc79",
+          "#e5e510",
+          "#2472c8",
+          "#bc3fbc",
+          "#11a8cd",
+          "#e5e5e5",
+          "#666666",
+          "#f14c4c",
+          "#23d18b",
+          "#f5f543",
+          "#3b8eea",
+          "#d670d6",
+          "#29b8db",
+          "#e5e5e5"
         ]
       }
     },
-    "dark-pink": {
-      "category": "dark-cool",
-      "vscode": { "theme_id": "Dark Pink", "extension_id": "fralyx.dark-pink" },
+    "dark-blue": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-blue",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Abyss"
+        ]
+      },
       "palette": {
-        "background": "#1d0116", "foreground": "#ffcccc", "cursor": "#661f40",
+        "background": "#000c18",
+        "foreground": "#6688cc",
+        "cursor": "#ddbb88",
         "ansi": [
-          "#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
-          "#666666", "#f14c4c", "#23d18b", "#ff8800", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+          "#111111",
+          "#ff9da4",
+          "#d1f1a9",
+          "#ffeead",
+          "#bbdaff",
+          "#ebbbff",
+          "#99ffff",
+          "#cccccc",
+          "#333333",
+          "#ff7882",
+          "#b8f171",
+          "#ffe580",
+          "#80baff",
+          "#d778ff",
+          "#78ffff",
+          "#ffffff"
         ]
       }
     },
-    "grass": {
-      "category": "dark-warm",
-      "vscode": { "theme_id": "Green Abyss", "extension_id": "mureni.green-abyss" },
+    "dark-green": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-green",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Monokai",
+          "chromaticli dark-olive"
+        ]
+      },
       "palette": {
-        "background": "#13773d", "foreground": "#fff0a5", "cursor": "#8c2800",
+        "background": "#102a1a",
+        "foreground": "#d2efdd",
+        "cursor": "#66bc87",
         "ansi": [
-          "#000000", "#bb0000", "#00bb00", "#e7b000", "#0000a3", "#950062", "#00bbbb", "#bbbbbb",
-          "#555555", "#bb0000", "#00bb00", "#e7b000", "#0000bb", "#ff55ff", "#55ffff", "#ffffff"
+          "#333333",
+          "#ff9288",
+          "#83d99d",
+          "#ebd279",
+          "#89bdff",
+          "#dca2dc",
+          "#7edcd9",
+          "#d2efdd",
+          "#666666",
+          "#ffa9a1",
+          "#a4ebba",
+          "#f7e69b",
+          "#aed4ff",
+          "#efbdef",
+          "#9bf0eb",
+          "#f4f9f6"
         ]
       }
     },
-    "kimbie-dark": {
-      "category": "dark-warm",
-      "vscode": { "theme_id": "Kimbie Dark", "extension_id": null },
+    "dark-indigo": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-indigo",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
       "palette": {
-        "background": "#221a0f", "foreground": "#d3af86", "cursor": "#d3af86",
+        "background": "#171632",
+        "foreground": "#d3d2fa",
+        "cursor": "#8e8be0",
         "ansi": [
-          "#000000", "#cd3131", "#0dbc79", "#e5e510", "#2472c8", "#bc3fbc", "#11a8cd", "#e5e5e5",
-          "#666666", "#f14c4c", "#23d18b", "#f5f543", "#3b8eea", "#d670d6", "#29b8db", "#e5e5e5"
+          "#111111",
+          "#ff899d",
+          "#91dca6",
+          "#f1d476",
+          "#aca5ff",
+          "#e3a0e0",
+          "#7fdce9",
+          "#d3d2fa",
+          "#333333",
+          "#ffa4b1",
+          "#a8ecc0",
+          "#fae49a",
+          "#c4bdff",
+          "#f0b6ec",
+          "#9aedf4",
+          "#ffffff"
         ]
       }
     },
-    "light-modern": {
+    "dark-orange": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-orange",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Kimbie Dark"
+        ]
+      },
+      "palette": {
+        "background": "#221a0f",
+        "foreground": "#d3af86",
+        "cursor": "#d3af86",
+        "ansi": [
+          "#000000",
+          "#cd3131",
+          "#0dbc79",
+          "#e5e510",
+          "#2472c8",
+          "#bc3fbc",
+          "#11a8cd",
+          "#e5e5e5",
+          "#666666",
+          "#f14c4c",
+          "#23d18b",
+          "#f5f543",
+          "#3b8eea",
+          "#d670d6",
+          "#29b8db",
+          "#e5e5e5"
+        ]
+      }
+    },
+    "dark-red": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-red",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Dark Pink",
+          "chromaticli dark-pink"
+        ]
+      },
+      "palette": {
+        "background": "#270e12",
+        "foreground": "#f8d9d5",
+        "cursor": "#e57669",
+        "ansi": [
+          "#000000",
+          "#cd3131",
+          "#0dbc79",
+          "#e5e510",
+          "#2472c8",
+          "#bc3fbc",
+          "#11a8cd",
+          "#e5e5e5",
+          "#666666",
+          "#f14c4c",
+          "#23d18b",
+          "#ff8800",
+          "#3b8eea",
+          "#d670d6",
+          "#29b8db",
+          "#e5e5e5"
+        ]
+      }
+    },
+    "dark-violet": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-violet",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#260e31",
+        "foreground": "#f3dbfa",
+        "cursor": "#c87adb",
+        "ansi": [
+          "#111111",
+          "#ff9da4",
+          "#d1f1a9",
+          "#ffeead",
+          "#bbdaff",
+          "#ebbbff",
+          "#99ffff",
+          "#cccccc",
+          "#333333",
+          "#ff7882",
+          "#b8f171",
+          "#ffe580",
+          "#80baff",
+          "#d778ff",
+          "#78ffff",
+          "#ffffff"
+        ]
+      }
+    },
+    "dark-yellow": {
+      "category": "dark",
+      "vscode": {
+        "theme_id": "chromaticli dark-yellow",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#292506",
+        "foreground": "#f3ea9f",
+        "cursor": "#e3d03e",
+        "ansi": [
+          "#111111",
+          "#e87569",
+          "#8fcb78",
+          "#f2d65d",
+          "#79baff",
+          "#d58bd3",
+          "#69d2cc",
+          "#f3ea9f",
+          "#333333",
+          "#ff9286",
+          "#a7e38e",
+          "#ffe98b",
+          "#a3cfff",
+          "#e9a9e6",
+          "#91e5df",
+          "#ffffff"
+        ]
+      }
+    },
+    "green": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli green",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Green Abyss"
+        ]
+      },
+      "palette": {
+        "background": "#13773d",
+        "foreground": "#b6ffd5",
+        "cursor": "#005825",
+        "ansi": [
+          "#000000",
+          "#ffada6",
+          "#a5efb2",
+          "#ffe18f",
+          "#9bc7ff",
+          "#edafe4",
+          "#89e8e4",
+          "#f4fff8",
+          "#555555",
+          "#ffc0b7",
+          "#b9f6c2",
+          "#fff0ad",
+          "#b8d9ff",
+          "#f6c4ef",
+          "#a5f2ef",
+          "#ffffff"
+        ]
+      }
+    },
+    "indigo": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli indigo",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#36327f",
+        "foreground": "#f2f1ff",
+        "cursor": "#b0abff",
+        "ansi": [
+          "#000000",
+          "#ff9eae",
+          "#a9e8b2",
+          "#f7df95",
+          "#b7b0ff",
+          "#ecafe8",
+          "#91e0ed",
+          "#f2f1ff",
+          "#565656",
+          "#ffb6c2",
+          "#bff0c5",
+          "#ffebad",
+          "#cbc5ff",
+          "#f4c4f0",
+          "#a8edf4",
+          "#ffffff"
+        ]
+      }
+    },
+    "light": {
+      "category": "defaults",
+      "vscode": {
+        "theme_id": "chromaticli light",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Default Light Modern"
+        ]
+      },
+      "palette": {
+        "background": "#ffffff",
+        "foreground": "#1d1d1f",
+        "cursor": "#6e6e73",
+        "ansi": [
+          "#000000",
+          "#cd3131",
+          "#00bc00",
+          "#949800",
+          "#0451a5",
+          "#bc05bc",
+          "#0598bc",
+          "#555555",
+          "#666666",
+          "#cd3131",
+          "#14ce14",
+          "#b5ba00",
+          "#0451a5",
+          "#bc05bc",
+          "#0598bc",
+          "#a5a5a5"
+        ]
+      }
+    },
+    "light-blue": {
       "category": "light",
-      "vscode": { "theme_id": "Default Light Modern", "extension_id": null },
+      "vscode": {
+        "theme_id": "chromaticli light-blue",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
       "palette": {
-        "background": "#ffffff", "foreground": "#3b3b3b", "cursor": "#005fb8",
+        "background": "#e8f2ff",
+        "foreground": "#183b5b",
+        "cursor": "#1f6096",
         "ansi": [
-          "#000000", "#cd3131", "#00bc00", "#949800", "#0451a5", "#bc05bc", "#0598bc", "#555555",
-          "#666666", "#cd3131", "#14ce14", "#b5ba00", "#0451a5", "#bc05bc", "#0598bc", "#a5a5a5"
+          "#183b5b",
+          "#a42b40",
+          "#226449",
+          "#805700",
+          "#205c9d",
+          "#83438c",
+          "#176978",
+          "#46576a",
+          "#40556d",
+          "#b02c43",
+          "#176345",
+          "#805900",
+          "#285fa4",
+          "#7c438e",
+          "#196b7a",
+          "#586579"
         ]
       }
     },
-    "monokai": {
-      "category": "dark-warm",
-      "vscode": { "theme_id": "Monokai", "extension_id": null },
-      "palette": {
-        "background": "#272822", "foreground": "#f8f8f2", "cursor": "#f8f8f0",
-        "ansi": [
-          "#333333", "#c4265e", "#86b42b", "#b3b42b", "#6a7ec8", "#8c6bc8", "#56adbc", "#e3e3dd",
-          "#666666", "#f92672", "#a6e22e", "#e2e22e", "#819aff", "#ae81ff", "#66d9ef", "#f8f8f2"
-        ]
-      }
-    },
-    "ocean": {
-      "category": "dark-cool",
-      "vscode": { "theme_id": "Tomorrow Night Blue", "extension_id": null },
-      "palette": {
-        "background": "#224fbc", "foreground": "#ffffff", "cursor": "#7f7f7f",
-        "ansi": [
-          "#000000", "#990000", "#00a600", "#999900", "#0000b2", "#b200b2", "#00a6b2", "#bfbfbf",
-          "#666666", "#e50000", "#00d900", "#e5e500", "#0000ff", "#e500e5", "#00e5e5", "#e5e5e5"
-        ]
-      }
-    },
-    "purple-rain": {
-      "category": "dark-cool",
-      "vscode": { "theme_id": "Functional Purple", "extension_id": "JoshDavies.functional-programming" },
-      "palette": {
-        "background": "#21084a", "foreground": "#fffbf6", "cursor": "#ff271d",
-        "ansi": [
-          "#000000", "#ff260e", "#9be205", "#ffc400", "#00a2fa", "#815bb5", "#00deef", "#ffffff",
-          "#565656", "#ff4250", "#b8e36e", "#ffd852", "#00a6ff", "#ac7bf0", "#74fdf3", "#ffffff"
-        ]
-      }
-    },
-    "red-sands": {
-      "category": "dark-warm",
-      "vscode": { "theme_id": "Red", "extension_id": null },
-      "palette": {
-        "background": "#7a251e", "foreground": "#d7c9a7", "cursor": "#ffffff",
-        "ansi": [
-          "#000000", "#ff3f00", "#00bb00", "#e7b000", "#0072ff", "#bb00bb", "#00bbbb", "#bbbbbb",
-          "#555555", "#bb0000", "#00bb00", "#e7b000", "#0072ae", "#ff55ff", "#55ffff", "#ffffff"
-        ]
-      }
-    },
-    "solarized-dark": {
-      "category": "dark-cool",
-      "vscode": { "theme_id": "Solarized Dark", "extension_id": null },
-      "palette": {
-        "background": "#002b36", "foreground": "#839496", "cursor": "#839496",
-        "ansi": [
-          "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
-          "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3"
-        ]
-      }
-    },
-    "solarized-light": {
+    "light-green": {
       "category": "light",
-      "vscode": { "theme_id": "Solarized Light", "extension_id": null },
+      "vscode": {
+        "theme_id": "chromaticli light-green",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
       "palette": {
-        "background": "#fdf6e3", "foreground": "#657b83", "cursor": "#657b83",
+        "background": "#e8f6e9",
+        "foreground": "#214a24",
+        "cursor": "#287b2e",
         "ansi": [
-          "#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5",
-          "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3"
+          "#263b29",
+          "#a12d3f",
+          "#296d3b",
+          "#795300",
+          "#275f9e",
+          "#7b3e89",
+          "#17636c",
+          "#4e6b50",
+          "#526657",
+          "#b33547",
+          "#357b48",
+          "#866000",
+          "#326ba8",
+          "#914e91",
+          "#1b6a70",
+          "#4e6b50"
+        ]
+      }
+    },
+    "light-indigo": {
+      "category": "light",
+      "vscode": {
+        "theme_id": "chromaticli light-indigo",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#e8ebff",
+        "foreground": "#242c5f",
+        "cursor": "#4d58a2",
+        "ansi": [
+          "#30375d",
+          "#a52c48",
+          "#2c7049",
+          "#735000",
+          "#3755a7",
+          "#7f3b8a",
+          "#1b6a78",
+          "#4f5476",
+          "#4b5070",
+          "#b53551",
+          "#2c7048",
+          "#806000",
+          "#4163b2",
+          "#8f5196",
+          "#1a6472",
+          "#626787"
+        ]
+      }
+    },
+    "light-orange": {
+      "category": "light",
+      "vscode": {
+        "theme_id": "chromaticli light-orange",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#fff1e3",
+        "foreground": "#56351f",
+        "cursor": "#a4521b",
+        "ansi": [
+          "#183b5b",
+          "#a42b40",
+          "#226449",
+          "#805700",
+          "#205c9d",
+          "#83438c",
+          "#176978",
+          "#46576a",
+          "#40556d",
+          "#b02c43",
+          "#176345",
+          "#805900",
+          "#285fa4",
+          "#7c438e",
+          "#196b7a",
+          "#586579"
+        ]
+      }
+    },
+    "light-red": {
+      "category": "light",
+      "vscode": {
+        "theme_id": "chromaticli light-red",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "chromaticli light-pink"
+        ]
+      },
+      "palette": {
+        "background": "#fff0ec",
+        "foreground": "#592923",
+        "cursor": "#af443d",
+        "ansi": [
+          "#59263a",
+          "#a12b39",
+          "#30664b",
+          "#7c5a17",
+          "#375f94",
+          "#923f76",
+          "#28696c",
+          "#6b4855",
+          "#755364",
+          "#b02c47",
+          "#286446",
+          "#81550f",
+          "#355d91",
+          "#8a3b72",
+          "#22676b",
+          "#7a5263"
+        ]
+      }
+    },
+    "light-violet": {
+      "category": "light",
+      "vscode": {
+        "theme_id": "chromaticli light-violet",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "chromaticli light-purple"
+        ]
+      },
+      "palette": {
+        "background": "#f1eaff",
+        "foreground": "#382752",
+        "cursor": "#65449e",
+        "ansi": [
+          "#382752",
+          "#9b304c",
+          "#316343",
+          "#795717",
+          "#2e5d91",
+          "#7042a0",
+          "#226571",
+          "#594a6d",
+          "#655674",
+          "#a22f52",
+          "#2d6245",
+          "#7b5517",
+          "#315c96",
+          "#70439d",
+          "#236471",
+          "#6c567c"
+        ]
+      }
+    },
+    "light-yellow": {
+      "category": "light",
+      "vscode": {
+        "theme_id": "chromaticli light-yellow",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Solarized Light",
+          "chromaticli light-cream"
+        ]
+      },
+      "palette": {
+        "background": "#fff7d3",
+        "foreground": "#4b421b",
+        "cursor": "#7e6700",
+        "ansi": [
+          "#403714",
+          "#a62e39",
+          "#286b3d",
+          "#755300",
+          "#245b9c",
+          "#803b8c",
+          "#176773",
+          "#4b421b",
+          "#645a33",
+          "#b83b45",
+          "#347b49",
+          "#856100",
+          "#2f6daf",
+          "#8c4c98",
+          "#237987",
+          "#615737"
+        ]
+      }
+    },
+    "orange": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli orange",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#9a4b16",
+        "foreground": "#fff2dd",
+        "cursor": "#ffe0a8",
+        "ansi": [
+          "#000000",
+          "#cd3131",
+          "#0dbc79",
+          "#e5e510",
+          "#2472c8",
+          "#bc3fbc",
+          "#11a8cd",
+          "#e5e5e5",
+          "#666666",
+          "#f14c4c",
+          "#23d18b",
+          "#f5f543",
+          "#3b8eea",
+          "#d670d6",
+          "#29b8db",
+          "#e5e5e5"
+        ]
+      }
+    },
+    "red": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli red",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Red"
+        ]
+      },
+      "palette": {
+        "background": "#7a251e",
+        "foreground": "#d7c9a7",
+        "cursor": "#ffffff",
+        "ansi": [
+          "#000000",
+          "#ff3f00",
+          "#00bb00",
+          "#e7b000",
+          "#0072ff",
+          "#bb00bb",
+          "#00bbbb",
+          "#bbbbbb",
+          "#555555",
+          "#bb0000",
+          "#00bb00",
+          "#e7b000",
+          "#0072ae",
+          "#ff55ff",
+          "#55ffff",
+          "#ffffff"
+        ]
+      }
+    },
+    "violet": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli violet",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled",
+        "legacy_theme_ids": [
+          "Functional Purple",
+          "chromaticli purple"
+        ]
+      },
+      "palette": {
+        "background": "#21084a",
+        "foreground": "#fffbf6",
+        "cursor": "#c7c3cc",
+        "ansi": [
+          "#000000",
+          "#ff260e",
+          "#9be205",
+          "#ffc400",
+          "#00a2fa",
+          "#815bb5",
+          "#00deef",
+          "#ffffff",
+          "#565656",
+          "#ff4250",
+          "#b8e36e",
+          "#ffd852",
+          "#00a6ff",
+          "#ac7bf0",
+          "#74fdf3",
+          "#ffffff"
+        ]
+      }
+    },
+    "yellow": {
+      "category": "core",
+      "vscode": {
+        "theme_id": "chromaticli yellow",
+        "extension_id": "chromaticli.chromaticli-themes",
+        "source": "bundled"
+      },
+      "palette": {
+        "background": "#7b6909",
+        "foreground": "#fffbe5",
+        "cursor": "#fff2ab",
+        "ansi": [
+          "#201b05",
+          "#ffaaa0",
+          "#b2ea9a",
+          "#fff1a6",
+          "#9bd1ff",
+          "#edb0e7",
+          "#91e5df",
+          "#fffbe5",
+          "#6a5e32",
+          "#ffc0b8",
+          "#c8f3b2",
+          "#fff7ca",
+          "#b9e0ff",
+          "#f7c4f2",
+          "#b5f1ec",
+          "#ffffff"
         ]
       }
     }
   },
   "pairs": {
-    "default": { "light": "light-modern", "dark": "dark-modern" },
-    "solarized": { "light": "solarized-light", "dark": "solarized-dark" }
+    "default": {
+      "light": "light",
+      "dark": "dark"
+    },
+    "red-pair": {
+      "light": "light-red",
+      "dark": "dark-red"
+    },
+    "orange-pair": {
+      "light": "light-orange",
+      "dark": "dark-orange"
+    },
+    "yellow-pair": {
+      "light": "light-yellow",
+      "dark": "dark-yellow"
+    },
+    "green-pair": {
+      "light": "light-green",
+      "dark": "dark-green"
+    },
+    "blue-pair": {
+      "light": "light-blue",
+      "dark": "dark-blue"
+    },
+    "indigo-pair": {
+      "light": "light-indigo",
+      "dark": "dark-indigo"
+    },
+    "violet-pair": {
+      "light": "light-violet",
+      "dark": "dark-violet"
+    }
   }
 }

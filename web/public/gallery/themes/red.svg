@@ -10,7 +10,7 @@
   <circle cx="44" cy="12.0" r="5" fill="#28c840"/>
   <!-- title -->
   <text x="140.0" y="17" fill="#d7c9a7" opacity="0.75" font-size="11"
-        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">red-sands</text>
+        text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">red</text>
   <text x="10" y="40" fill="#d7c9a7" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">❯ git status</text>
   <text x="10" y="54" fill="#bbbbbb" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">On branch main</text>
   <text x="10" y="68" fill="#e7b000" font-size="11" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">  modified: README.md</text>

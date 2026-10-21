@@ -96,7 +96,7 @@ function _chromaticli_pick
     end
 
     jq -r --arg n $theme_name \
-        '.themes | to_entries[] | select(.value.vscode.theme_id == $n) | .key' \
+        '.themes | to_entries[] | select(.value.vscode.theme_id == $n or ((.value.vscode.legacy_theme_ids // []) | index($n) != null)) | .key' \
         $_chromaticli_themes
 end
 

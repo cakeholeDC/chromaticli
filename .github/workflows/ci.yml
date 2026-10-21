@@ -59,8 +59,8 @@ jobs:
         # generator and committing the regenerated artifacts. Also catch newly
         # generated SVGs, which git diff ignores until they are tracked.
         run: |
-          git diff --exit-code -- docs/theme_preview.html docs/theme_preview.md web/gallery/index.html web/public/gallery/
-          untracked_previews=$(git ls-files --others --exclude-standard -- web/gallery/index.html web/public/gallery/)
+          git diff --exit-code -- docs/theme_preview.html docs/theme_preview.md web/themes/index.html web/public/gallery/
+          untracked_previews=$(git ls-files --others --exclude-standard -- web/themes/index.html web/public/gallery/)
           if [ -n "$untracked_previews" ]; then
             printf 'Untracked generated previews:\n%s\n' "$untracked_previews"
             exit 1
