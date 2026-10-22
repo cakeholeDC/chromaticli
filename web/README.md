@@ -43,9 +43,11 @@ The build reads `.release-please-manifest.json` at the repository root and expos
 
 For release builds, supply the selected release tag explicitly:
 
+<!-- x-release-please-start-version -->
 ```sh
 CHROMATICLI_RELEASE_TAG=v0.1.0 pnpm build
 ```
+<!-- x-release-please-end -->
 
-Replace the example with the actual tag. When supplied, `CHROMATICLI_RELEASE_TAG` must equal `v` followed by the manifest version exactly; empty, malformed, or mismatched tags fail the build. Ordinary local builds may omit it. This variable is a build validation input and is not exposed to the browser. Deployment eligibility checks and workflows are handled in later tasks.
+Release Please updates the example tag with each release. When supplied, `CHROMATICLI_RELEASE_TAG` must equal `v` followed by the manifest version exactly; empty, malformed, or mismatched tags fail the build. Ordinary local builds may omit it. This variable is a build validation input and is not exposed to the browser. Deployment eligibility checks and workflows are handled in later tasks.
 
