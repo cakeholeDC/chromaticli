@@ -21,6 +21,41 @@
 _CHROMATICLI_DIR="${0:A:h}"
 _CHROMATICLI_THEMES="$_CHROMATICLI_DIR/themes.json"
 
+_chromaticli_rainbow_name() {
+  printf '\033[38;5;196mc\033[38;5;208mh\033[38;5;226mr\033[38;5;46mo\033[38;5;51mm\033[38;5;21ma\033[38;5;93mt\033[38;5;196mi\033[38;5;208mc\033[38;5;226ml\033[38;5;46mi\033[0m'
+}
+
+_chromaticli_check_install_version() {
+  [[ -n "${_CHROMATICLI_SYNC_CHECKED-}" ]] && return
+  _CHROMATICLI_SYNC_CHECKED=1
+  local marker="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli/install-version.json"
+  local cli="$HOME/.local/bin/chromaticli" reported result
+  local recovery='chromaticli install --force'
+  local app_name=chromaticli
+  [[ -t 2 && -z "${NO_COLOR-}" ]] && app_name=$(_chromaticli_rainbow_name)
+  if [[ -x "$_CHROMATICLI_DIR/chromaticli" ]]; then
+    cli="$_CHROMATICLI_DIR/chromaticli"
+    recovery="env CHROMATICLI_LIBEXEC=\"$_CHROMATICLI_DIR\" \"$cli\" install --force"
+  fi
+  if [[ ! -f "$marker" ]]; then
+    result=stale
+  elif [[ ! -x "$cli" ]] || ! reported=$("$cli" --version 2>/dev/null); then
+    result=unverifiable
+  else
+    result=$(jq -er --arg reported "$reported" '
+      if .schema == 1 and (.version | type) == "string" then
+        if ($reported | test("^chromaticli [0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.+-]+)?$") | not) then "unverifiable"
+        elif $reported == ("chromaticli " + .version) then "current"
+        else "stale" end
+      else "unverifiable" end
+    ' "$marker" 2>/dev/null) || result=unverifiable
+  fi
+  case "$result" in
+    stale) printf "\n[WARN]: %s: version mismatch detected; run \`%s\`, then restart your shell.\n" "$app_name" "$recovery" >&2 ;;
+    unverifiable) printf "\n[WARN]: %s: could not verify installed versions; run \`%s\`, then restart your shell.\n" "$app_name" "$recovery" >&2 ;;
+  esac
+}
+
 # --- emit one OSC sequence, wrapping for tmux passthrough if needed ---
 _chromaticli_osc() {
   local body="$1"
@@ -145,9 +180,29 @@ _chromaticli_precmd_check_appearance() {
   fi
 }
 
+_chromaticli_finish_initial_prompt() {
+  _chromaticli_apply
+}
+
+# Powerlevel10k keeps stdout and stderr redirected through initialization.
+# Its first precmd hook schedules cleanup after precmd handlers have run, so a
+# zero-delay scheduled callback can still write into the capture. Keep the
+# version warning pending until a later precmd, when P10K has removed its
+# instant-prompt marker and restored the normal terminal streams.
+_chromaticli_check_version_after_instant_prompt() {
+  [[ -n "${__p9k_instant_prompt_active-}" ]] && return
+  add-zsh-hook -d precmd _chromaticli_check_version_after_instant_prompt
+  _chromaticli_check_install_version
+}
+
+_chromaticli_after_initial_prompt() {
+  add-zsh-hook -d precmd _chromaticli_after_initial_prompt
+  sched +0 _chromaticli_finish_initial_prompt
+}
+
 autoload -Uz add-zsh-hook
+zmodload zsh/sched 2>/dev/null || true
 add-zsh-hook chpwd  _chromaticli_apply
 add-zsh-hook precmd _chromaticli_precmd_check_appearance
-
-# Apply once on shell init for the spawning directory.
-_chromaticli_apply
+add-zsh-hook precmd _chromaticli_after_initial_prompt
+add-zsh-hook precmd _chromaticli_check_version_after_instant_prompt

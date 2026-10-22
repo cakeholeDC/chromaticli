@@ -23,6 +23,41 @@ _CHROMATICLI_HOOK_BASH_LOADED=1
 _CHROMATICLI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CHROMATICLI_THEMES="$_CHROMATICLI_DIR/themes.json"
 
+_chromaticli_rainbow_name() {
+  printf '\033[38;5;196mc\033[38;5;208mh\033[38;5;226mr\033[38;5;46mo\033[38;5;51mm\033[38;5;21ma\033[38;5;93mt\033[38;5;196mi\033[38;5;208mc\033[38;5;226ml\033[38;5;46mi\033[0m'
+}
+
+_chromaticli_check_install_version() {
+  [[ -n "${_CHROMATICLI_SYNC_CHECKED-}" ]] && return
+  _CHROMATICLI_SYNC_CHECKED=1
+  local marker="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli/install-version.json"
+  local cli="$HOME/.local/bin/chromaticli" reported result
+  local recovery='chromaticli install --force'
+  local app_name=chromaticli
+  [[ -t 2 && -z "${NO_COLOR-}" ]] && app_name=$(_chromaticli_rainbow_name)
+  if [[ -x "$_CHROMATICLI_DIR/chromaticli" ]]; then
+    cli="$_CHROMATICLI_DIR/chromaticli"
+    recovery="env CHROMATICLI_LIBEXEC=\"$_CHROMATICLI_DIR\" \"$cli\" install --force"
+  fi
+  if [[ ! -f "$marker" ]]; then
+    result=stale
+  elif [[ ! -x "$cli" ]] || ! reported=$("$cli" --version 2>/dev/null); then
+    result=unverifiable
+  else
+    result=$(jq -er --arg reported "$reported" '
+      if .schema == 1 and (.version | type) == "string" then
+        if ($reported | test("^chromaticli [0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.+-]+)?$") | not) then "unverifiable"
+        elif $reported == ("chromaticli " + .version) then "current"
+        else "stale" end
+      else "unverifiable" end
+    ' "$marker" 2>/dev/null) || result=unverifiable
+  fi
+  case "$result" in
+    stale) printf "\n[WARN]: %s: version mismatch detected; run \`%s\`, then restart your shell.\n" "$app_name" "$recovery" >&2 ;;
+    unverifiable) printf "\n[WARN]: %s: could not verify installed versions; run \`%s\`, then restart your shell.\n" "$app_name" "$recovery" >&2 ;;
+  esac
+}
+
 _chromaticli_osc() {
   local body="$1"
   if [[ -n "$TMUX" ]]; then
@@ -153,6 +188,7 @@ _chromaticli_precmd_check_appearance() {
 # Appearance re-check runs every prompt when directory is unchanged.
 _CHROMATICLI_PREV_PWD="$PWD"
 _chromaticli_prompt_hook() {
+  _chromaticli_check_install_version
   if [[ "$PWD" != "$_CHROMATICLI_PREV_PWD" ]]; then
     _CHROMATICLI_PREV_PWD="$PWD"
     _chromaticli_apply

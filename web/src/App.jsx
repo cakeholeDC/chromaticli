@@ -9,7 +9,7 @@ const docsUrl = `${repositoryUrl}#readme`;
 const themeIds = Object.keys(registry.themes).sort();
 const installCommands = {
   macos: 'brew install cakeholeDC/tap/chromaticli\nchromaticli install',
-  linux: 'git clone https://github.com/cakeholeDC/chromaticli.git\ncd chromaticli\n./chromaticli install',
+  linux: `git clone --branch v${__CHROMATICLI_VERSION__} https://github.com/cakeholeDC/chromaticli.git\ncd chromaticli\n./chromaticli install`,
 };
 
 export default function App() {

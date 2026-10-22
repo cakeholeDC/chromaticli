@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install dependencies
-        run: sudo apt-get install -y jq
+        run: sudo apt-get install -y bash fish jq zsh
 
       - name: Validate themes.json schema
         # Fast JSON-syntax check. Catches malformed themes.json before any

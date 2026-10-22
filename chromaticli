@@ -9,10 +9,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHROMATICLI_MANAGED_DIR="${CHROMATICLI_LIBEXEC:-}"
 CHROMATICLI_SOURCE_DIR="${CHROMATICLI_MANAGED_DIR:-$SCRIPT_DIR}"
 CHROMATICLI_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli"
+CHROMATICLI_SYNC_MARKER="$CHROMATICLI_CONFIG_DIR/install-version.json"
 CHROMATICLI_BIN_DIR="$HOME/.local/bin"
 CHROMATICLI_BIN="$CHROMATICLI_BIN_DIR/chromaticli"
 ZSHRC="${ZDOTDIR:-$HOME}/.zshrc"
 BASH_PROFILE="$HOME/.bash_profile"
+BASHRC="$HOME/.bashrc"
 FISH_CONF_D="${XDG_CONFIG_HOME:-$HOME/.config}/fish/conf.d"
 FISH_SHIM="$FISH_CONF_D/chromaticli.fish"
 
@@ -72,6 +74,7 @@ _chromaticli_version_key() {
 # Install only through the supported code CLI. The adjacent manifest supplies
 # identity/version; code validates the VSIX itself, then we verify its result.
 _chromaticli_install_bundled_extension() {
+  _CHROMATICLI_EXTENSION_SYNCED=0
   local force="${1:-0}" support_dir="${2:-$(dirname "$THEMES_JSON")}" copy_dir="${3:-}" no_install="${4:-0}"
   if [[ -n "$copy_dir" && -f "$copy_dir/vscode-extension/package.json" && "$force" == 0 ]]; then
     support_dir="$copy_dir"
@@ -120,10 +123,12 @@ _chromaticli_install_bundled_extension() {
     }
     if jq -en --argjson installed "$installed_key" --argjson bundled "$local_key" '$installed > $bundled' >/dev/null; then
       echo "preserved newer VS Code themes: chromaticli.chromaticli-themes@$installed_version (bundled $version)"
+      _CHROMATICLI_EXTENSION_SYNCED=1
       return 0
     fi
     if [[ "$force" == 0 && "$installed_key" == "$local_key" ]]; then
       echo "already installed VS Code themes: chromaticli.chromaticli-themes@$installed_version"
+      _CHROMATICLI_EXTENSION_SYNCED=1
       return 0
     fi
   fi
@@ -139,6 +144,19 @@ _chromaticli_install_bundled_extension() {
     err "code did not report chromaticli.chromaticli-themes@$version after installation"; return 1
   fi
   echo "installed VS Code themes: chromaticli.chromaticli-themes@$version"
+  _CHROMATICLI_EXTENSION_SYNCED=1
+}
+
+_chromaticli_write_sync_marker() {
+  local tmp
+  mkdir -p "$CHROMATICLI_CONFIG_DIR" || return 1
+  tmp=$(mktemp "$CHROMATICLI_CONFIG_DIR/.install-version.XXXXXX") || return 1
+  if jq -n --arg version "$CHROMATICLI_VERSION" '{schema: 1, version: $version}' > "$tmp" &&
+    mv "$tmp" "$CHROMATICLI_SYNC_MARKER"; then
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
 }
 
 # Return 0 if the file at $1 has our signature comment in its first two lines.
@@ -895,8 +913,8 @@ Idempotent — safe to re-run. Each shell can be added independently:
 For source installs, a one-line advisory is printed if ~/.local/bin is not on
 $PATH. The installer never auto-edits $PATH.
 
-For bash: the hook is added to ~/.bash_profile (macOS login shell default).
-  If your setup only sources ~/.bashrc, add it there manually instead.
+For bash: the hook is added to both ~/.bash_profile and ~/.bashrc so it loads
+  in login and non-login interactive shells.
 For fish: a one-line shim is written to
   ~/.config/fish/conf.d/chromaticli.fish (auto-sourced by fish; no rc edit).
 EOF
@@ -960,6 +978,10 @@ EOF
   [[ -f "$THEMES_SRC"    ]] || die "themes.json not found at $THEMES_SRC"
   [[ -n "$CHROMATICLI_MANAGED_DIR" || -f "$CLI_SRC" ]] || die "chromaticli CLI not found at $CLI_SRC"
 
+  # Any interrupted or partial refresh must remain visible to a new shell.
+  # The marker is recreated only after every required step succeeds.
+  rm -f "$CHROMATICLI_SYNC_MARKER"
+
   if [[ -z "$CHROMATICLI_MANAGED_DIR" ]]; then
     # Create config dir
     mkdir -p "$CHROMATICLI_CONFIG_DIR"
@@ -1020,11 +1042,39 @@ EOF
     esac
   done
 
+  if [[ -z "$CHROMATICLI_MANAGED_DIR" ]]; then
+    local installed_file source_file
+    for installed_file in hook.zsh hook.bash hook.fish themes.json; do
+      source_file="$CHROMATICLI_SOURCE_DIR/$installed_file"
+      if ! cmp -s "$source_file" "$CHROMATICLI_CONFIG_DIR/$installed_file"; then
+        err "$installed_file is older than the source; rerun install with --force"
+        return 1
+      fi
+    done
+    if ! cmp -s "$CLI_SRC" "$CHROMATICLI_BIN" || [[ ! -x "$CHROMATICLI_BIN" ]]; then
+      err "$CHROMATICLI_BIN is older than the source; rerun install with --force"
+      return 1
+    fi
+  fi
+
   [[ -n "$CHROMATICLI_MANAGED_DIR" ]] || _print_path_advisory
-  _print_new_shell_hint "${shells[@]}"
   local copy_dir=""
   [[ -n "$CHROMATICLI_MANAGED_DIR" ]] || copy_dir="$CHROMATICLI_CONFIG_DIR"
-  _chromaticli_install_bundled_extension "$force" "$CHROMATICLI_SOURCE_DIR" "$copy_dir" "$no_install"
+  _chromaticli_install_bundled_extension "$force" "$CHROMATICLI_SOURCE_DIR" "$copy_dir" "$no_install" || return 1
+  if [[ -z "$CHROMATICLI_MANAGED_DIR" ]]; then
+    local bundled_version bundled_vsix
+    bundled_version=$(jq -er '.version | select(type == "string")' "$CHROMATICLI_SOURCE_DIR/vscode-extension/package.json") || return 1
+    bundled_vsix="chromaticli-themes-$bundled_version.vsix"
+    if ! cmp -s "$CHROMATICLI_SOURCE_DIR/vscode-extension/package.json" "$copy_dir/vscode-extension/package.json" ||
+      ! cmp -s "$CHROMATICLI_SOURCE_DIR/vscode-extension/$bundled_vsix" "$copy_dir/vscode-extension/$bundled_vsix"; then
+      err "bundled VS Code support is older than the source; rerun install with --force"
+      return 1
+    fi
+  fi
+  if [[ "$_CHROMATICLI_EXTENSION_SYNCED" == "1" ]]; then
+    _chromaticli_write_sync_marker || { err "could not record synchronized install at $CHROMATICLI_SYNC_MARKER"; return 1; }
+  fi
+  _print_new_shell_hint "${shells[@]}"
 }
 
 _install_rc_text() {
@@ -1068,11 +1118,13 @@ _install_rc_zsh() {
 _install_rc_bash() {
   local force="$1"
   local is_new=0
-  grep -Fq "# chromaticli" "$BASH_PROFILE" 2>/dev/null || is_new=1
-  _install_rc_text "$force" "$BASH_PROFILE" "source \"$HOOK_INSTALL_DIR/hook.bash\""
+  local rc_file
+  for rc_file in "$BASH_PROFILE" "$BASHRC"; do
+    grep -Fq "# chromaticli" "$rc_file" 2>/dev/null || is_new=1
+    _install_rc_text "$force" "$rc_file" "source \"$HOOK_INSTALL_DIR/hook.bash\""
+  done
   if (( is_new )); then
-    echo "Note: hook added to ~/.bash_profile (macOS login shell default)."
-    echo "      If your setup only sources ~/.bashrc, add it there manually instead."
+    echo "Note: hook added to ~/.bash_profile and ~/.bashrc for login and non-login shells."
   fi
 }
 
@@ -1133,7 +1185,7 @@ Reverse a previous \`chromaticli install\`:
   - remove ~/.local/bin/chromaticli (only if signature matches)
   - remove $CHROMATICLI_CONFIG_DIR (hooks, themes.json, bundled VSIX)
   - strip the # chromaticli source block from ~/.zshrc if present
-  - strip the # chromaticli source block from ~/.bash_profile if present
+  - strip the # chromaticli source blocks from ~/.bash_profile and ~/.bashrc if present
   - remove $FISH_SHIM if present
   - reset the current terminal's colors to its profile defaults
 
@@ -1243,40 +1295,43 @@ EOF
     echo "no .zshrc found — nothing to remove for zsh."
   fi
 
-  # --- Step 4: strip the .bash_profile source block ---
-  if [[ -f "$BASH_PROFILE" ]]; then
-    local bash_marker_line
-    bash_marker_line=$(grep -nF "# chromaticli" "$BASH_PROFILE" 2>/dev/null | head -1 | cut -d: -f1 || true)
-
-    if [[ -z "$bash_marker_line" ]]; then
-      echo "chromaticli hook is not installed in $BASH_PROFILE — nothing to remove."
-    else
-      local bash_next_line=$(( bash_marker_line + 1 ))
-      local bash_src_line
-      bash_src_line=$(sed -n "${bash_next_line}p" "$BASH_PROFILE")
-      if ! [[ "$bash_src_line" =~ ^[[:space:]]*source ]]; then
-        err "refusing to edit $BASH_PROFILE: line after '# chromaticli' doesn't look like a 'source ...' line."
-        err "Inspect $BASH_PROFILE and remove the chromaticli block manually."
-        return 1
-      else
-        local bash_prev_line=$(( bash_marker_line - 1 ))
-        local bash_start_line="$bash_marker_line"
-        if (( bash_prev_line > 0 )); then
-          local bash_prev_content
-          bash_prev_content=$(sed -n "${bash_prev_line}p" "$BASH_PROFILE")
-          [[ -z "$bash_prev_content" ]] && bash_start_line="$bash_prev_line"
-        fi
-        local bash_backup="$BASH_PROFILE.chromaticli.bak"
-        cp "$BASH_PROFILE" "$bash_backup"
-        sed -i.tmp "${bash_start_line},${bash_next_line}d" "$BASH_PROFILE"
-        rm -f "$BASH_PROFILE.tmp"
-        echo "removed chromaticli block from $BASH_PROFILE (lines ${bash_start_line}–${bash_next_line})"
-        echo "backup saved to $bash_backup"
-      fi
+  # --- Step 4: strip Bash source blocks from login and non-login startup files ---
+  _remove_bash_rc_block() {
+    local rc_file="$1"
+    if [[ ! -f "$rc_file" ]]; then
+      echo "no $rc_file found — nothing to remove for bash."
+      return 0
     fi
-  else
-    echo "no .bash_profile found — nothing to remove for bash."
-  fi
+    local marker_line
+    marker_line=$(grep -nF "# chromaticli" "$rc_file" 2>/dev/null | head -1 | cut -d: -f1 || true)
+    if [[ -z "$marker_line" ]]; then
+      echo "chromaticli hook is not installed in $rc_file — nothing to remove."
+      return 0
+    fi
+    local next_line=$(( marker_line + 1 ))
+    local src_line
+    src_line=$(sed -n "${next_line}p" "$rc_file")
+    if ! [[ "$src_line" =~ ^[[:space:]]*source ]]; then
+      err "refusing to edit $rc_file: line after '# chromaticli' doesn't look like a 'source ...' line."
+      err "Inspect $rc_file and remove the chromaticli block manually."
+      return 1
+    fi
+    local prev_line=$(( marker_line - 1 ))
+    local start_line="$marker_line"
+    if (( prev_line > 0 )); then
+      local prev_content
+      prev_content=$(sed -n "${prev_line}p" "$rc_file")
+      [[ -z "$prev_content" ]] && start_line="$prev_line"
+    fi
+    local backup="$rc_file.chromaticli.bak"
+    cp "$rc_file" "$backup"
+    sed -i.tmp "${start_line},${next_line}d" "$rc_file"
+    rm -f "$rc_file.tmp"
+    echo "removed chromaticli block from $rc_file (lines ${start_line}–${next_line})"
+    echo "backup saved to $backup"
+  }
+  _remove_bash_rc_block "$BASH_PROFILE" || return 1
+  _remove_bash_rc_block "$BASHRC" || return 1
 
   # --- Step 5: remove the fish conf.d shim ---
   if [[ -f "$FISH_SHIM" ]]; then

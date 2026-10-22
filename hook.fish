@@ -10,6 +10,52 @@
 set -g _chromaticli_dir (dirname (status filename))
 set -g _chromaticli_themes $_chromaticli_dir/themes.json
 
+function _chromaticli_rainbow_name
+    printf '\033[38;5;196mc\033[38;5;208mh\033[38;5;226mr\033[38;5;46mo\033[38;5;51mm\033[38;5;21ma\033[38;5;93mt\033[38;5;196mi\033[38;5;208mc\033[38;5;226ml\033[38;5;46mi\033[0m'
+end
+
+function _chromaticli_check_install_version --on-event fish_prompt
+    set -q _chromaticli_sync_checked; and return
+    set -g _chromaticli_sync_checked 1
+    set -l config_home "$HOME/.config"
+    if set -q XDG_CONFIG_HOME; and test -n "$XDG_CONFIG_HOME"
+        set config_home "$XDG_CONFIG_HOME"
+    end
+    set -l marker "$config_home/chromaticli/install-version.json"
+    set -l cli "$HOME/.local/bin/chromaticli"
+    set -l recovery 'chromaticli install --force'
+    set -l app_name chromaticli
+    if isatty stderr; and not set -q NO_COLOR
+        set app_name (_chromaticli_rainbow_name)
+    end
+    if test -x "$_chromaticli_dir/chromaticli"
+        set cli "$_chromaticli_dir/chromaticli"
+        set recovery "env CHROMATICLI_LIBEXEC=\"$_chromaticli_dir\" \"$cli\" install --force"
+    end
+    set -l result
+    if not test -f "$marker"
+        set result stale
+    else if not test -x "$cli"
+        set result unverifiable
+    else
+        set -l reported ("$cli" --version 2>/dev/null)
+        set result (jq -er --arg reported "$reported" '
+                if .schema == 1 and (.version | type) == "string" then
+                  if ($reported | test("^chromaticli [0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.+-]+)?$") | not) then "unverifiable"
+                  elif $reported == ("chromaticli " + .version) then "current"
+                  else "stale" end
+                else "unverifiable" end
+        ' "$marker" 2>/dev/null)
+        or set result unverifiable
+    end
+    switch "$result"
+        case stale
+            printf '\n[WARN]: %s: version mismatch detected; run `%s`, then restart your shell.\n' "$app_name" "$recovery" >&2
+        case unverifiable
+            printf '\n[WARN]: %s: could not verify installed versions; run `%s`, then restart your shell.\n' "$app_name" "$recovery" >&2
+    end
+end
+
 function _chromaticli_osc
     set -l body $argv[1]
     if set -q TMUX

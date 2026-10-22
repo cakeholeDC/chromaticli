@@ -29,13 +29,15 @@ Install `git` and `jq` with your distribution's package manager, then clone and
 install from the source checkout:
 
 ```sh
-git clone https://github.com/cakeholeDC/chromaticli.git
+git clone --branch v0.1.0 https://github.com/cakeholeDC/chromaticli.git # x-release-please-version
 cd chromaticli
 ./chromaticli install
 ```
 
 Start a new shell session after installation. chromaticli supports zsh, bash,
-and fish. The Linux install uses the repository checkout as its source.
+and fish. The Linux install uses the repository checkout as its source. If a
+shell warns after an upgrade, run the recovery command it prints, then start a
+new shell session.
 
 ## Use
 
