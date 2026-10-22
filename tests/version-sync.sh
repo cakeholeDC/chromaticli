@@ -14,6 +14,22 @@ require jq
 require bash
 require zsh
 
+expected_rainbow=$(printf '\033[38;5;196mc\033[38;5;208mh\033[38;5;226mr\033[38;5;46mo\033[38;5;51mm\033[38;5;21ma\033[38;5;93mt\033[38;5;196mi\033[38;5;208mc\033[38;5;226ml\033[38;5;46mi\033[0m')
+for shell in bash zsh; do
+  # shellcheck disable=SC2016 # The child shell expands $1, not this test script.
+  label=$("$shell" -c 'source "$1"; _chromaticli_rainbow_name' _ "$ROOT/hook.$shell")
+  [[ "$label" == "$expected_rainbow" ]] || fail "$shell rainbow warning label did not match the fixed ANSI palette"
+  pass "$shell fixed ANSI rainbow warning label"
+done
+if command -v fish >/dev/null; then
+  # shellcheck disable=SC2016 # Fish expands $argv[1] in its child process.
+  label=$(fish -c 'source $argv[1]; _chromaticli_rainbow_name' "$ROOT/hook.fish")
+  [[ "$label" == "$expected_rainbow" ]] || fail 'fish rainbow warning label did not match the fixed ANSI palette'
+  pass 'fish fixed ANSI rainbow warning label'
+else
+  echo '  skip fish rainbow label test (fish is not installed)'
+fi
+
 VERSION=$(sed -n 's/^CHROMATICLI_VERSION="\([^"]*\)".*/\1/p' "$ROOT/chromaticli")
 
 run_hook_case() {

@@ -10,6 +10,10 @@
 set -g _chromaticli_dir (dirname (status filename))
 set -g _chromaticli_themes $_chromaticli_dir/themes.json
 
+function _chromaticli_rainbow_name
+    printf '\033[38;5;196mc\033[38;5;208mh\033[38;5;226mr\033[38;5;46mo\033[38;5;51mm\033[38;5;21ma\033[38;5;93mt\033[38;5;196mi\033[38;5;208mc\033[38;5;226ml\033[38;5;46mi\033[0m'
+end
+
 function _chromaticli_check_install_version --on-event fish_prompt
     set -q _chromaticli_sync_checked; and return
     set -g _chromaticli_sync_checked 1
@@ -20,6 +24,10 @@ function _chromaticli_check_install_version --on-event fish_prompt
     set -l marker "$config_home/chromaticli/install-version.json"
     set -l cli "$HOME/.local/bin/chromaticli"
     set -l recovery 'chromaticli install --force'
+    set -l app_name chromaticli
+    if isatty stderr; and not set -q NO_COLOR
+        set app_name (_chromaticli_rainbow_name)
+    end
     if test -x "$_chromaticli_dir/chromaticli"
         set cli "$_chromaticli_dir/chromaticli"
         set recovery "env CHROMATICLI_LIBEXEC=\"$_chromaticli_dir\" \"$cli\" install --force"
@@ -42,9 +50,9 @@ function _chromaticli_check_install_version --on-event fish_prompt
     end
     switch "$result"
         case stale
-            printf '\n[WARN]: chromaticli: version mismatch detected; run `%s`, then restart your shell.\n' "$recovery" >&2
+            printf '\n[WARN]: %s: version mismatch detected; run `%s`, then restart your shell.\n' "$app_name" "$recovery" >&2
         case unverifiable
-            printf '\n[WARN]: chromaticli: could not verify installed versions; run `%s`, then restart your shell.\n' "$recovery" >&2
+            printf '\n[WARN]: %s: could not verify installed versions; run `%s`, then restart your shell.\n' "$app_name" "$recovery" >&2
     end
 end
 

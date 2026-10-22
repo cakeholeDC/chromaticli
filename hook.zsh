@@ -21,12 +21,18 @@
 _CHROMATICLI_DIR="${0:A:h}"
 _CHROMATICLI_THEMES="$_CHROMATICLI_DIR/themes.json"
 
+_chromaticli_rainbow_name() {
+  printf '\033[38;5;196mc\033[38;5;208mh\033[38;5;226mr\033[38;5;46mo\033[38;5;51mm\033[38;5;21ma\033[38;5;93mt\033[38;5;196mi\033[38;5;208mc\033[38;5;226ml\033[38;5;46mi\033[0m'
+}
+
 _chromaticli_check_install_version() {
   [[ -n "${_CHROMATICLI_SYNC_CHECKED-}" ]] && return
   _CHROMATICLI_SYNC_CHECKED=1
   local marker="${XDG_CONFIG_HOME:-$HOME/.config}/chromaticli/install-version.json"
   local cli="$HOME/.local/bin/chromaticli" reported result
   local recovery='chromaticli install --force'
+  local app_name=chromaticli
+  [[ -t 2 && -z "${NO_COLOR-}" ]] && app_name=$(_chromaticli_rainbow_name)
   if [[ -x "$_CHROMATICLI_DIR/chromaticli" ]]; then
     cli="$_CHROMATICLI_DIR/chromaticli"
     recovery="env CHROMATICLI_LIBEXEC=\"$_CHROMATICLI_DIR\" \"$cli\" install --force"
@@ -45,8 +51,8 @@ _chromaticli_check_install_version() {
     ' "$marker" 2>/dev/null) || result=unverifiable
   fi
   case "$result" in
-    stale) printf "\n[WARN]: chromaticli: version mismatch detected; run \`%s\`, then restart your shell.\n" "$recovery" >&2 ;;
-    unverifiable) printf "\n[WARN]: chromaticli: could not verify installed versions; run \`%s\`, then restart your shell.\n" "$recovery" >&2 ;;
+    stale) printf "\n[WARN]: %s: version mismatch detected; run \`%s\`, then restart your shell.\n" "$app_name" "$recovery" >&2 ;;
+    unverifiable) printf "\n[WARN]: %s: could not verify installed versions; run \`%s\`, then restart your shell.\n" "$app_name" "$recovery" >&2 ;;
   esac
 }
 
