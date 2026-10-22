@@ -29,7 +29,7 @@ Install `git` and `jq` with your distribution's package manager, then clone and
 install from the source checkout:
 
 ```sh
-git clone https://github.com/cakeholeDC/chromaticli.git
+git clone --branch v0.1.0 https://github.com/cakeholeDC/chromaticli.git # x-release-please-version
 cd chromaticli
 ./chromaticli install
 ```
