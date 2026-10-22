@@ -54,6 +54,93 @@ require_jq() {
   command -v jq >/dev/null || die "jq is required (brew install jq)"
 }
 
+# SemVer precedence, including prereleases; jq's arrays compare component-wise.
+# Keep this in jq rather than sort -V (unavailable on stock macOS).
+_chromaticli_version_key() {
+  jq -cen --arg v "$1" '
+    $v | capture("^(?<core>(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*)\\.(?:0|[1-9][0-9]*))(?:-(?<pre>[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$")
+    | (.pre // "" | if . == "" then [] else split(".") end) as $pre
+    | if any($pre[]; test("^0[0-9]+$")) then error("invalid prerelease") else
+        [(.core | split(".") | map([length, .])),
+         (if $pre == [] then [1] else
+            [0, ($pre | map(if test("^[0-9]+$") then [0, length, .] else [1, .] end))]
+          end)]
+      end
+  ' 2>/dev/null
+}
+
+# Install only through the supported code CLI. The adjacent manifest supplies
+# identity/version; code validates the VSIX itself, then we verify its result.
+_chromaticli_install_bundled_extension() {
+  local force="${1:-0}" support_dir="${2:-$(dirname "$THEMES_JSON")}" copy_dir="${3:-}" no_install="${4:-0}"
+  if [[ -n "$copy_dir" && -f "$copy_dir/vscode-extension/package.json" && "$force" == 0 ]]; then
+    support_dir="$copy_dir"
+    copy_dir=""
+  fi
+  local extension_dir="$support_dir/vscode-extension" version vsix local_key
+  version=$(jq -er '
+    select(.publisher == "chromaticli" and .name == "chromaticli-themes")
+    | .version | select(type == "string")
+  ' "$extension_dir/package.json" 2>/dev/null) || {
+    err "missing or invalid bundled extension manifest: $extension_dir/package.json"; return 1;
+  }
+  local_key=$(_chromaticli_version_key "$version") || {
+    err "invalid bundled extension version: $version"; return 1;
+  }
+  vsix="$extension_dir/chromaticli-themes-$version.vsix"
+  [[ -s "$vsix" ]] || { err "missing or empty bundled VSIX: $vsix"; return 1; }
+
+  if [[ -n "$copy_dir" ]]; then
+    if ! { mkdir -p "$copy_dir/vscode-extension" &&
+      cp "$vsix" "$copy_dir/vscode-extension/" &&
+      cp "$extension_dir/package.json" "$copy_dir/vscode-extension/"; }; then
+      err "could not copy bundled VS Code theme support to $copy_dir"; return 1
+    fi
+    vsix="$copy_dir/vscode-extension/chromaticli-themes-$version.vsix"
+  fi
+
+  if (( no_install )); then
+    err "skipped bundled VS Code theme installation (--no-install); VS Code may not load these themes until the VSIX is installed"
+    return 0
+  fi
+
+  if ! command -v code >/dev/null 2>&1; then
+    err "code CLI not found; shell setup remains usable. VS Code themes require: code --install-extension \"$vsix\""
+    return 0
+  fi
+
+  local installed installed_version installed_key
+  installed=$(code --list-extensions --show-versions) || {
+    err "could not query VS Code extensions; bundled themes were not installed"; return 1;
+  }
+  installed_version=$(awk -F@ 'tolower($1) == "chromaticli.chromaticli-themes" { print $2 }' <<<"$installed")
+  if [[ -n "$installed_version" ]]; then
+    installed_key=$(_chromaticli_version_key "$installed_version") || {
+      err "invalid installed bundled extension version: $installed_version"; return 1;
+    }
+    if jq -en --argjson installed "$installed_key" --argjson bundled "$local_key" '$installed > $bundled' >/dev/null; then
+      echo "preserved newer VS Code themes: chromaticli.chromaticli-themes@$installed_version (bundled $version)"
+      return 0
+    fi
+    if [[ "$force" == 0 && "$installed_key" == "$local_key" ]]; then
+      echo "already installed VS Code themes: chromaticli.chromaticli-themes@$installed_version"
+      return 0
+    fi
+  fi
+
+  echo "installing bundled VS Code themes: $vsix"
+  code --install-extension "$vsix" --force || {
+    err "failed to install bundled VS Code themes from $vsix"; return 1;
+  }
+  installed=$(code --list-extensions --show-versions) || {
+    err "could not confirm bundled VS Code theme installation"; return 1;
+  }
+  if ! grep -qxiF "chromaticli.chromaticli-themes@$version" <<<"$installed"; then
+    err "code did not report chromaticli.chromaticli-themes@$version after installation"; return 1
+  fi
+  echo "installed VS Code themes: chromaticli.chromaticli-themes@$version"
+}
+
 # Return 0 if the file at $1 has our signature comment in its first two lines.
 # Safe to call on missing files (returns 1). Resolves symlinks via head -n 2
 # (which follows them by default), so a symlink that points at our script
@@ -65,15 +152,18 @@ _chromaticli_is_ours() {
 }
 
 # Build the ordered list as tab-separated rows: <N>\t<kind>\t<id>
-# Order: dark-warm themes (alpha) → dark-cool themes (alpha) → light themes (alpha) → pairs (JSON order).
+# Order: Core, Light, Dark, Defaults. Hue themes follow ROYGBIV, then pairs.
 _build_ordered_list() {
   jq -r '
-    def bucket_order: ["dark-warm", "dark-cool", "light"];
+    def display_category: if . == "dark-warm" or . == "dark-cool" then "dark" else . end;
+    def hue: sub("^(light|dark)-"; "");
+    def hue_order: ["red", "orange", "yellow", "green", "blue", "indigo", "violet", "light", "dark"];
+    def bucket_order: ["core", "light", "dark", "defaults"];
     [
       (bucket_order[] as $cat |
         .themes | to_entries
-          | map(select(.value.category == $cat))
-          | sort_by(.key)
+          | map(select((.value.category | display_category) == $cat))
+          | sort_by(.key | hue as $id | hue_order | index($id))
           | .[]
           | {kind: "theme", id: .key}),
       (.pairs | to_entries[] | {kind: "pair", id: .key})
@@ -138,7 +228,7 @@ _detect_active_theme() {
   [[ -n "$active_name" ]] || return 0
   jq -r --arg n "$active_name" '
     .themes | to_entries[]
-      | select(.value.vscode.theme_id == $n)
+      | select(.value.vscode.theme_id == $n or ((.value.vscode.legacy_theme_ids // []) | index($n) != null))
       | .key
   ' "$THEMES_JSON"
 }
@@ -263,16 +353,19 @@ _emit_reset() {
 
 cmd_help() {
   _print_header
+  if [[ -t 1 ]]; then
+    printf 'Your terminal. Your editor. chromaticli.\n\n'
+  else
+    printf 'Your terminal. Your editor. chromaticli.\n\n'
+  fi
   cat <<'EOF'
-chromaticli — sync terminal colors with VSCode workspace themes.
-
 Usage:
   chromaticli <subcommand> [options]
   chromaticli --help | -h          show this help
   chromaticli --version | -v       print version
 
 Subcommands:
-  install   [--force]              copy CLI to ~/.local/bin/, hooks+themes to ~/.config/chromaticli/,
+  install   [--force] [--no-install] copy CLI to ~/.local/bin/, hooks+themes to ~/.config/chromaticli/,
             [--shell <zsh|bash|fish>]  wire hook into shell rc (default: auto-detect from $SHELL)
             [--all-shells]         wire hook into every supported shell found on this system
   uninstall                        remove CLI from ~/.local/bin/ (identity-checked),
@@ -281,7 +374,7 @@ Subcommands:
   set       [<theme|pair|N>]       set the theme for the current (or --project) dir
             [--pair <id|N>]        explicit pair mode
             [--theme <id|N>]       explicit single-theme mode
-            [--no-install]         skip VSCode extension auto-install
+            [--no-install]         skip local VS Code theme VSIX installation
             [--project <dir>]      target a directory other than CWD
   unset     [--project <dir>]      remove theme keys from .vscode/settings.json
   preview   [<theme|pair|N>]       temporarily apply a theme's colors (requires install; no file writes)
@@ -290,8 +383,13 @@ Subcommands:
   sync      [--project <dir>]      re-apply the theme for <dir> (or $PWD) using the active shell's hook
 
 Every subcommand supports --help.
-See tests/SMOKE_TEST.md for a guided install→use→uninstall walkthrough.
 EOF
+  if [[ -t 1 ]]; then
+    printf '\nPronounced \033[3mchromatically\033[0m (/kroʊˈmæ.tɪ.kli/).\n'
+  else
+    printf '\nPronounced chromatically (/kroʊˈmæ.tɪ.kli/).\n'
+  fi
+  printf 'Version %s\n' "$CHROMATICLI_VERSION"
 }
 
 # ---------------------------------------------------------------------------
@@ -327,13 +425,17 @@ EOF
   while IFS=$'\t' read -r N KIND ID; do
     if [[ "$KIND" == "theme" ]]; then
       local cat
-      cat=$(jq -r --arg t "$ID" '.themes[$t].category' "$THEMES_JSON")
+      cat=$(jq -r --arg t "$ID" '
+        .themes[$t].category
+        | if . == "dark-warm" or . == "dark-cool" then "dark" else . end
+      ' "$THEMES_JSON")
       if [[ "$cat" != "$prev_cat" ]]; then
         [[ -n "$prev_cat" ]] && echo ""
         case "$cat" in
-          dark-warm) echo "── Dark — warm / earthy ──────────────────────────────────────" ;;
-          dark-cool) echo "── Dark — cool / blue ────────────────────────────────────────" ;;
-          light)     echo "── Light ─────────────────────────────────────────────────────" ;;
+          core)  echo "── Core ──────────────────────────────────────────────────────" ;;
+          light) echo "── Light ─────────────────────────────────────────────────────" ;;
+          dark)  echo "── Dark ───────────────────────────────────────────────────────" ;;
+          defaults) echo "── Defaults ──────────────────────────────────────────────────" ;;
         esac
         echo ""
         prev_cat="$cat"
@@ -456,7 +558,6 @@ EOF
   local settings="$project_dir/.vscode/settings.json"
   local ext_file="$project_dir/.vscode/extensions.json"
   [[ -f "$settings" ]] || echo '{}' > "$settings"
-  [[ -f "$ext_file" ]] || echo '{"recommendations":[]}' > "$ext_file"
 
   local tmp
   tmp=$(mktemp)
@@ -488,20 +589,20 @@ EOF
   mv "$tmp" "$settings"
 
   # --- Merge extensions.json ---
-  local exts=()
-  if [[ -n "$pair_id" ]]; then
-    for t in "$light" "$dark"; do
-      local e
+  local exts=() selected=() bundled=0 t e source
+  if [[ -n "$pair_id" ]]; then selected=("$light" "$dark"); else selected=("$theme_id"); fi
+  for t in "${selected[@]}"; do
+    source=$(jq -r --arg t "$t" '.themes[$t].vscode.source // empty' "$THEMES_JSON")
+    if [[ "$source" == bundled ]]; then
+      bundled=1
+    else
       e=$(jq -r --arg t "$t" '.themes[$t].vscode.extension_id // empty' "$THEMES_JSON")
       [[ -n "$e" ]] && exts+=("$e")
-    done
-  else
-    local e
-    e=$(jq -r --arg t "$theme_id" '.themes[$t].vscode.extension_id // empty' "$THEMES_JSON")
-    [[ -n "$e" ]] && exts+=("$e")
-  fi
+    fi
+  done
 
   if (( ${#exts[@]} > 0 )); then
+    [[ -f "$ext_file" ]] || echo '{"recommendations":[]}' > "$ext_file"
     jq --argjson new "$(printf '%s\n' "${exts[@]}" | jq -R . | jq -s .)" '
       .recommendations = ((.recommendations // []) + $new | unique)
     ' "$ext_file" > "$tmp"
@@ -511,6 +612,13 @@ EOF
   echo "wrote $settings"
 
   # --- Auto-install VSCode extensions ---
+  if (( bundled )); then
+    if (( no_install )); then
+      err "skipped bundled VS Code theme installation (--no-install); VS Code may not load the selected theme until the VSIX is installed"
+    else
+      _chromaticli_install_bundled_extension || return 1
+    fi
+  fi
   if (( no_install == 0 )) && command -v code >/dev/null 2>&1 && (( ${#exts[@]} > 0 )); then
     local installed
     installed=$(code --list-extensions 2>/dev/null || true)
@@ -759,13 +867,13 @@ EOF
 # ---------------------------------------------------------------------------
 
 cmd_install() {
-  local force=0 target_shell="" all_shells=0
+  local force=0 target_shell="" all_shells=0 no_install=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --help|-h)
         cat <<'EOF'
-Usage: chromaticli install [--force] [--shell <zsh|bash|fish>] [--all-shells]
+Usage: chromaticli install [--force] [--no-install] [--shell <zsh|bash|fish>] [--all-shells]
 
 Configure chromaticli shell integration. From a source checkout this also copies
 the CLI to ~/.local/bin and support files to ~/.config/chromaticli. A package
@@ -776,6 +884,8 @@ Shell auto-detection: reads $SHELL and configures that shell by default.
   --shell <zsh|bash|fish>   configure a specific shell instead of auto-detecting
   --all-shells              configure every supported shell found on this system
   --force                   overwrite existing installed files; re-wire rc files
+                            repair same-version VSIX; always preserve newer versions
+  --no-install              skip VS Code theme installation (support files still copied)
 
 `--shell` and `--all-shells` are mutually exclusive.
 
@@ -792,6 +902,7 @@ For fish: a one-line shim is written to
 EOF
         return 0 ;;
       --force)      force=1; shift ;;
+      --no-install) no_install=1; shift ;;
       --shell)
         [[ -z "${2-}" ]] && die_usage "--shell requires an argument: --shell <zsh|bash|fish>"
         target_shell="$2"; shift 2 ;;
@@ -911,6 +1022,9 @@ EOF
 
   [[ -n "$CHROMATICLI_MANAGED_DIR" ]] || _print_path_advisory
   _print_new_shell_hint "${shells[@]}"
+  local copy_dir=""
+  [[ -n "$CHROMATICLI_MANAGED_DIR" ]] || copy_dir="$CHROMATICLI_CONFIG_DIR"
+  _chromaticli_install_bundled_extension "$force" "$CHROMATICLI_SOURCE_DIR" "$copy_dir" "$no_install"
 }
 
 _install_rc_text() {
@@ -1015,14 +1129,18 @@ cmd_uninstall() {
 Usage: chromaticli uninstall
 
 Reverse a previous \`chromaticli install\`:
+  - remove the bundled chromaticli.chromaticli-themes extension through code
   - remove ~/.local/bin/chromaticli (only if signature matches)
-  - remove $CHROMATICLI_CONFIG_DIR (hooks + themes.json)
+  - remove $CHROMATICLI_CONFIG_DIR (hooks, themes.json, bundled VSIX)
   - strip the # chromaticli source block from ~/.zshrc if present
   - strip the # chromaticli source block from ~/.bash_profile if present
   - remove $FISH_SHIM if present
   - reset the current terminal's colors to its profile defaults
 
 Idempotent — re-running after a clean uninstall is a no-op.
+Package-managed executable and support files are preserved.
+If code is unavailable or extension removal cannot be confirmed, exit 1
+before local cleanup or terminal reset; retain the CLI and VSIX for retry.
 
 Project .vscode/ files are left alone (harmless without the hook; the user
 authored them per-project and we don't own them).
@@ -1030,29 +1148,55 @@ EOF
     return 0
   fi
 
-  # --- Step 1: remove ~/.local/bin/chromaticli (identity-checked) ---
-  # Use -L so we treat symlinks as files (we check the resolved target's
-  # signature and then `rm` the link itself, never the target).
-  if [[ -L "$CHROMATICLI_BIN" || -f "$CHROMATICLI_BIN" ]]; then
-    if _chromaticli_is_ours "$CHROMATICLI_BIN"; then
-      rm -f "$CHROMATICLI_BIN"
-      echo "removed: $CHROMATICLI_BIN"
-    else
-      err "refusing to remove $CHROMATICLI_BIN: file exists but does not look like chromaticli (signature comment missing). Inspect and remove manually if intended."
+  # Confirm extension cleanup before changing local files or terminal colors.
+  # Keep the installed CLI and VSIX usable when code fails, including on retry.
+  local extension_id="chromaticli.chromaticli-themes" installed cleanup_error="" retry
+  if ! command -v code >/dev/null 2>&1; then
+    cleanup_error="code CLI not found"
+  elif ! installed=$(code --list-extensions); then
+    cleanup_error="could not query VS Code extensions"
+  elif grep -qxiF "$extension_id" <<<"$installed"; then
+    if ! code --uninstall-extension "$extension_id"; then
+      cleanup_error="failed to remove $extension_id"
+    elif ! installed=$(code --list-extensions); then
+      cleanup_error="could not confirm removal of $extension_id"
+    elif grep -qxiF "$extension_id" <<<"$installed"; then
+      cleanup_error="code still reports $extension_id after removal"
     fi
-  else
-    echo "not present: $CHROMATICLI_BIN (skipped)"
+  fi
+  if [[ -n "$cleanup_error" ]]; then
+    err "incomplete cleanup: $cleanup_error. CLI, support files, and shell setup were retained; terminal colors were not reset."
+    err "Make code available on PATH or fix its error; manual recovery: code --uninstall-extension $extension_id"
+    printf -v retry '%q' "$SCRIPT_DIR/chromaticli"
+    err "Then retry with the same environment: $retry uninstall"
+    return 1
   fi
 
-  # --- Step 2: remove the config dir ---
-  # chromaticli's curation model puts nothing user-authored here: hook.zsh and
-  # themes.json are verbatim copies of the repo. Wiping the dir is symmetric
-  # with install creating it.
-  if [[ -d "$CHROMATICLI_CONFIG_DIR" ]]; then
-    rm -rf "$CHROMATICLI_CONFIG_DIR"
-    echo "removed: $CHROMATICLI_CONFIG_DIR"
-  else
-    echo "not present: $CHROMATICLI_CONFIG_DIR (skipped)"
+  # --- Steps 1–2: remove source-installed CLI and support files only ---
+  if [[ -z "$CHROMATICLI_MANAGED_DIR" ]]; then
+    # Use -L so we treat symlinks as files (we check the resolved target's
+    # signature and then `rm` the link itself, never the target).
+    if [[ -L "$CHROMATICLI_BIN" || -f "$CHROMATICLI_BIN" ]]; then
+      if _chromaticli_is_ours "$CHROMATICLI_BIN"; then
+        rm -f "$CHROMATICLI_BIN"
+        echo "removed: $CHROMATICLI_BIN"
+      else
+        err "refusing to remove $CHROMATICLI_BIN: file exists but does not look like chromaticli (signature comment missing). Inspect and remove manually if intended."
+      fi
+    else
+      echo "not present: $CHROMATICLI_BIN (skipped)"
+    fi
+
+    # --- Step 2: remove the config dir ---
+    # chromaticli's curation model puts nothing user-authored here: hook.zsh and
+    # themes.json are verbatim copies of the repo. Wiping the dir is symmetric
+    # with install creating it.
+    if [[ -d "$CHROMATICLI_CONFIG_DIR" ]]; then
+      rm -rf "$CHROMATICLI_CONFIG_DIR"
+      echo "removed: $CHROMATICLI_CONFIG_DIR"
+    else
+      echo "not present: $CHROMATICLI_CONFIG_DIR (skipped)"
+    fi
   fi
 
   # --- Step 3: strip the .zshrc source block ---

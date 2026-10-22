@@ -4,7 +4,7 @@
 #   web/public/gallery/themes/ — mock-terminal preview per theme (shared)
 #   docs/theme_preview.html        — local-file gallery
 #   docs/theme_preview.md          — GitHub-renderable gallery (same SVGs)
-#   web/gallery/index.html      — Vite entry for the website gallery
+#   web/themes/index.html       — Vite entry for the website themes page
 #
 # Run after adding/changing any entry under `.themes` in themes.json.
 # CI checks both galleries for stale or missing generated artifacts.
@@ -21,12 +21,24 @@ HTML_PATH = ROOT / "docs" / "theme_preview.html"
 MD_PATH = ROOT / "docs" / "theme_preview.md"
 SITE_DIR = ROOT / "web" / "public" / "gallery"
 SITE_THEMES_DIR = SITE_DIR / "themes"
-SITE_HTML_PATH = ROOT / "web" / "gallery" / "index.html"
+SITE_HTML_PATH = ROOT / "web" / "themes" / "index.html"
 
 W, H = 280, 170
 TITLE_H = 24
 SWATCH_H = 8
 PAD = 10
+THEME_SECTIONS = [
+    ("core", "Core"),
+    ("light", "Light"),
+    ("dark", "Dark"),
+    ("defaults", "Defaults"),
+]
+HUE_ORDER = ("red", "orange", "yellow", "green", "blue", "indigo", "violet", "light", "dark")
+
+
+def theme_order(tid: str) -> int:
+    hue = tid.removeprefix("light-").removeprefix("dark-")
+    return HUE_ORDER.index(hue)
 
 
 def svg(theme_id: str, palette: dict) -> str:
@@ -95,14 +107,26 @@ def esc(s: str) -> str:
     )
 
 
-def html_doc(ids: list[str]) -> str:
-    cards = "\n".join(
-        f'''    <figure class="card">
-      <img src="../web/public/gallery/themes/{tid}.svg" alt="{esc(tid)}" loading="lazy"/>
-      <figcaption><code>{esc(tid)}</code></figcaption>
-    </figure>'''
-        for tid in ids
-    )
+def html_doc(themes_data: dict) -> str:
+    sections = []
+    for category, label in THEME_SECTIONS:
+        ids = sorted((tid for tid, theme in themes_data.items() if theme.get("category") == category), key=theme_order)
+        if not ids:
+            continue
+        cards = "\n".join(
+            f'''      <figure class="card">
+        <img src="../web/public/gallery/themes/{tid}.svg" alt="{esc(tid)}" loading="lazy"/>
+        <figcaption><code>{esc(tid)}</code></figcaption>
+      </figure>'''
+            for tid in ids
+        )
+        sections.append(f'''  <section class="theme-section">
+    <h2>{label}</h2>
+    <div class="grid">
+{cards}
+    </div>
+  </section>''')
+    content = "\n".join(sections)
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -122,6 +146,8 @@ def html_doc(ids: list[str]) -> str:
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     gap: 18px;
   }}
+  .theme-section {{ margin: 28px 0; }}
+  .theme-section h2 {{ font-size: 16px; margin: 0 0 12px; }}
   .card {{ margin: 0; }}
   .card img {{ display: block; width: 100%; height: auto; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }}
   .card figcaption {{ font-size: 12px; margin-top: 6px; line-height: 1.4; }}
@@ -130,10 +156,8 @@ def html_doc(ids: list[str]) -> str:
 </head>
 <body>
   <h1>chromaticli — preview gallery</h1>
-  <p class="meta">{len(ids)} themes. Generated from <code>themes.json</code> via <code>scripts/generate-preview.py</code>.</p>
-  <div class="grid">
-{cards}
-  </div>
+  <p class="meta">{len(themes_data)} themes. Generated from <code>themes.json</code> via <code>scripts/generate-preview.py</code>.</p>
+{content}
 </body>
 </html>
 """
@@ -158,13 +182,6 @@ def site_html_doc() -> str:
 
 
 def md_doc(themes_data: dict, pairs_data: dict) -> str:
-    # Bucket by `category`, alphabetize within each. The order of buckets is fixed.
-    BUCKETS = [
-        ("dark-warm", "Dark — warm / earthy"),
-        ("dark-cool", "Dark — cool / blue"),
-        ("light",     "Light"),
-    ]
-
     def cell(tid: str) -> str:
         return (f'<img src="../web/public/gallery/themes/{tid}.svg" width="240" alt="{esc(tid)}"/><br/>'
                 f'<code>{esc(tid)}</code>')
@@ -180,8 +197,8 @@ def md_doc(themes_data: dict, pairs_data: dict) -> str:
 
     sections = []
     total = 0
-    for cat_key, cat_label in BUCKETS:
-        ids = sorted(tid for tid, t in themes_data.items() if t.get("category") == cat_key)
+    for cat_key, cat_label in THEME_SECTIONS:
+        ids = sorted((tid for tid, t in themes_data.items() if t.get("category") == cat_key), key=theme_order)
         if not ids:
             continue
         total += len(ids)
@@ -208,7 +225,7 @@ def md_doc(themes_data: dict, pairs_data: dict) -> str:
             + "\n\n".join(pair_sections)
         )
 
-    bucket_count = sum(1 for k, _ in BUCKETS if any(t.get('category') == k for t in themes_data.values()))
+    bucket_count = sum(1 for k, _ in THEME_SECTIONS if any(t.get('category') == k for t in themes_data.values()))
     header = (
         "# chromaticli — preview gallery\n\n"
         f"{total} themes in {bucket_count} buckets, plus {len(pairs_data)} auto pairs. "
@@ -237,7 +254,7 @@ def main() -> int:
             existing.unlink()
             print(f"removed stale {existing.relative_to(ROOT)}")
 
-    HTML_PATH.write_text(html_doc(ids))
+    HTML_PATH.write_text(html_doc(themes))
     MD_PATH.write_text(md_doc(themes, pairs))
     SITE_HTML_PATH.parent.mkdir(parents=True, exist_ok=True)
     SITE_HTML_PATH.write_text(site_html_doc())

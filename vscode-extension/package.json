@@ -1,0 +1,161 @@
+{
+  "name": "chromaticli-themes",
+  "displayName": "chromaticli themes",
+  "description": "Original editor themes paired with chromaticli terminal palettes.",
+  "version": "0.0.1",
+  "publisher": "chromaticli",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "files": [
+    "themes/*.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "id": "chromaticli blue",
+        "label": "chromaticli blue",
+        "uiTheme": "vs-dark",
+        "path": "./themes/blue.json"
+      },
+      {
+        "id": "chromaticli dark",
+        "label": "chromaticli dark",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark.json"
+      },
+      {
+        "id": "chromaticli dark-blue",
+        "label": "chromaticli dark-blue",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-blue.json"
+      },
+      {
+        "id": "chromaticli dark-green",
+        "label": "chromaticli dark-green",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-green.json"
+      },
+      {
+        "id": "chromaticli dark-indigo",
+        "label": "chromaticli dark-indigo",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-indigo.json"
+      },
+      {
+        "id": "chromaticli dark-orange",
+        "label": "chromaticli dark-orange",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-orange.json"
+      },
+      {
+        "id": "chromaticli dark-red",
+        "label": "chromaticli dark-red",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-red.json"
+      },
+      {
+        "id": "chromaticli dark-violet",
+        "label": "chromaticli dark-violet",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-violet.json"
+      },
+      {
+        "id": "chromaticli dark-yellow",
+        "label": "chromaticli dark-yellow",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-yellow.json"
+      },
+      {
+        "id": "chromaticli green",
+        "label": "chromaticli green",
+        "uiTheme": "vs-dark",
+        "path": "./themes/green.json"
+      },
+      {
+        "id": "chromaticli indigo",
+        "label": "chromaticli indigo",
+        "uiTheme": "vs-dark",
+        "path": "./themes/indigo.json"
+      },
+      {
+        "id": "chromaticli light",
+        "label": "chromaticli light",
+        "uiTheme": "vs",
+        "path": "./themes/light.json"
+      },
+      {
+        "id": "chromaticli light-blue",
+        "label": "chromaticli light-blue",
+        "uiTheme": "vs",
+        "path": "./themes/light-blue.json"
+      },
+      {
+        "id": "chromaticli light-green",
+        "label": "chromaticli light-green",
+        "uiTheme": "vs",
+        "path": "./themes/light-green.json"
+      },
+      {
+        "id": "chromaticli light-indigo",
+        "label": "chromaticli light-indigo",
+        "uiTheme": "vs",
+        "path": "./themes/light-indigo.json"
+      },
+      {
+        "id": "chromaticli light-orange",
+        "label": "chromaticli light-orange",
+        "uiTheme": "vs",
+        "path": "./themes/light-orange.json"
+      },
+      {
+        "id": "chromaticli light-red",
+        "label": "chromaticli light-red",
+        "uiTheme": "vs",
+        "path": "./themes/light-red.json"
+      },
+      {
+        "id": "chromaticli light-violet",
+        "label": "chromaticli light-violet",
+        "uiTheme": "vs",
+        "path": "./themes/light-violet.json"
+      },
+      {
+        "id": "chromaticli light-yellow",
+        "label": "chromaticli light-yellow",
+        "uiTheme": "vs",
+        "path": "./themes/light-yellow.json"
+      },
+      {
+        "id": "chromaticli orange",
+        "label": "chromaticli orange",
+        "uiTheme": "vs-dark",
+        "path": "./themes/orange.json"
+      },
+      {
+        "id": "chromaticli red",
+        "label": "chromaticli red",
+        "uiTheme": "vs-dark",
+        "path": "./themes/red.json"
+      },
+      {
+        "id": "chromaticli violet",
+        "label": "chromaticli violet",
+        "uiTheme": "vs-dark",
+        "path": "./themes/violet.json"
+      },
+      {
+        "id": "chromaticli yellow",
+        "label": "chromaticli yellow",
+        "uiTheme": "vs-dark",
+        "path": "./themes/yellow.json"
+      }
+    ]
+  }
+}

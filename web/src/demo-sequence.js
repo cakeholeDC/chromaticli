@@ -5,9 +5,12 @@ export function createDemoFrame() {
 }
 
 export function demoCommands(cycle, themeIds) {
+  const cycleCount = Math.ceil(themeIds.length / 2);
+  const firstIndex = (cycle % cycleCount) * 2;
+  const secondTheme = themeIds[firstIndex + 1];
   return [
-    'cd project_1', `chromaticli set ${themeIds[(cycle * 2) % themeIds.length]}`,
-    'cd ..', 'cd project_2', `chromaticli set ${themeIds[(cycle * 2 + 1) % themeIds.length]}`,
+    'cd project_1', `chromaticli set ${themeIds[firstIndex]}`,
+    'cd ..', 'cd project_2', ...(secondTheme ? [`chromaticli set ${secondTheme}`] : []),
     'cd ..', 'cd project_1', 'cd ../project_2', 'cd ../project_1',
     'cd ..', 'cd project_2', 'cd ..', 'clear',
   ];

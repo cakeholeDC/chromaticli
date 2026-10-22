@@ -19,7 +19,7 @@ export function SiteHeader({ currentPage = 'home' }) {
       <nav className="site-nav" aria-label="Site navigation">
         <a href={sectionLink('about')}>About</a>
         <a href={sectionLink('install')}>Install</a>
-        <a href="/gallery/" aria-current={currentPage === 'gallery' ? 'page' : undefined}>Themes</a>
+        <a href="/themes/" aria-current={currentPage === 'themes' ? 'page' : undefined}>Themes</a>
         <a href={repositoryUrl} target="_blank" rel="noopener noreferrer">GitHub</a>
       </nav>
     </header>

@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 # chromaticli :: verify-themes.py
-# Checks every entry in themes.json against the live VSCode marketplace:
+# Checks every entry in themes.json against VSCode theme sources:
 #   - extension_id resolves to a real published extension
 #   - theme_id matches one of the labels the extension contributes
 #   - entries with extension_id=null are validated against a hard-coded
 #     list of VSCode built-in theme display names
 #   - category is one of the allowed bucket values
+#   - vscode.source="bundled" uses the local extension manifest and checks
+#     referenced theme files and exact registry-owned terminal colors
 #
 # Exit codes: 0 = all clean, 1 = at least one entry needs fixing.
 #
-# Run after editing themes.json, before committing. Network required.
+# Run after editing themes.json, before committing. Marketplace entries need network.
 # CI runs this on every push/PR via the `verify-themes` job in
 # .github/workflows/ci.yml.
 
@@ -17,12 +19,16 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
+import runpy
 import sys
 import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 THEMES = ROOT / "themes.json"
+EXTENSION = ROOT / "vscode-extension"
+terminal_colors = runpy.run_path(str(ROOT / "scripts/generate-vscode-themes.py"))["terminal_colors"]
 
 API = "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery"
 HEADERS = {
@@ -96,7 +102,30 @@ def query_ext(ext_id: str) -> tuple[str, str, list[str]]:
     return ("OK", "", [t.get("label", "") for t in contributed])
 
 
-VALID_CATEGORIES = {"dark-warm", "dark-cool", "light"}
+VALID_CATEGORIES = {"core", "light", "dark", "defaults"}
+
+
+def verify_bundled(vs: dict, palette: dict) -> tuple[str, str]:
+    try:
+        manifest = json.loads((EXTENSION / "package.json").read_text())
+        ext_id = f"{manifest['publisher']}.{manifest['name']}"
+        if vs.get("extension_id") != ext_id:
+            raise ValueError(f"extension_id must match local manifest: {ext_id}")
+        if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", manifest["version"]):
+            raise ValueError("local extension version must use major.minor.patch format")
+        matches = [t for t in manifest["contributes"]["themes"] if t.get("label") == vs["theme_id"]]
+        if len(matches) != 1:
+            raise ValueError(f"expected exactly one local contributed label {vs['theme_id']!r}")
+        path = (EXTENSION / matches[0]["path"]).resolve()
+        path.relative_to(EXTENSION.resolve())
+        theme = json.loads(path.read_text())
+        expected = terminal_colors(palette)
+        mismatches = [key for key, color in expected.items() if theme.get("colors", {}).get(key) != color]
+        if mismatches:
+            raise ValueError(f"terminal colors differ from registry: {', '.join(mismatches)}")
+        return "BUNDLED_OK", f"'{vs['theme_id']}' confirmed locally ({ext_id}@{manifest['version']})"
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        return "BUNDLED_ERROR", str(e)
 
 
 def main() -> int:
@@ -117,6 +146,18 @@ def main() -> int:
         vs = t["vscode"]
         theme_id = vs["theme_id"]
         ext_id = vs.get("extension_id")
+
+        source = vs.get("source", "builtin" if ext_id is None else "marketplace")
+        if source == "bundled":
+            status, detail = verify_bundled(vs, t["palette"])
+            rows.append((tid, status, detail))
+            if status != "BUNDLED_OK":
+                failures.append(tid)
+            continue
+        if source not in {"builtin", "marketplace"} or (source == "builtin") != (ext_id is None):
+            rows.append((tid, "BAD_SOURCE", f"invalid vscode.source={source!r} for extension_id={ext_id!r}"))
+            failures.append(tid)
+            continue
 
         if ext_id is None:
             if theme_id in BUILTINS:
@@ -151,6 +192,8 @@ def main() -> int:
         print(f"{tid:<22} {status:<18} {detail}")
 
     print()
+    if not any(t["vscode"].get("source") == "bundled" for t in themes.values()):
+        print("NOTE: no bundled registry entries; local extension themes were not validated.")
     if failures:
         print(f"FAIL: {len(failures)} entr{'y' if len(failures) == 1 else 'ies'} need attention: "
               f"{', '.join(failures)}")

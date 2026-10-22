@@ -55,9 +55,9 @@ version 1.0, breaking changes bump the minor version.
 The registry is curated, not exhaustive. Before adding a theme, check that it
 adds a distinct color identity:
 
-- Prefer VS Code built-ins (`vscode.extension_id: null`). They have no
-  marketplace dependency, no install step, and cannot drift across extension
-  versions.
+- Add the theme to the local theme-only VS Code extension. Keep its picker
+  label as `chromaticli <color-id>` and generate integrated-terminal colors
+  from `themes.json`; do not add a Marketplace dependency for a bundled theme.
 - Use one representative per color identity. If a new theme is visually close to
   an existing entry, it probably weakens the registry.
 - Removing is allowed. If a new theme supersedes an existing entry, drop the
@@ -67,12 +67,30 @@ adds a distinct color identity:
   on their own line; the 16-entry `ansi` array split into two lines of 8
   entries.
 
-1. Edit `themes.json` — add your entry alphabetically by id.
-2. Run `python3 scripts/verify-themes.py` — must exit 0.
-3. Run `python3 scripts/generate-preview.py` — regenerates the shared SVG previews, docs galleries, and website gallery.
-4. Commit `themes.json` and all regenerated preview files together. The SVGs live once under `web/public/gallery/themes/` and are referenced by both docs galleries and the website.
+The CLI and bundled VS Code extension have independent versions. Follow these
+four steps whenever packaged extension content changes, including theme files,
+non-version manifest fields, `vscode-extension/README.md`, or its license.
+A CLI-only change does not require an extension version bump or VSIX rebuild.
 
-CI enforces both steps; a PR that fails either job will not be merged.
+1. Edit `themes.json` as needed, keeping entries alphabetical, and edit the
+   original editor definitions under `vscode-extension/themes/`.
+2. Manually increase `version` in `vscode-extension/package.json`. Every
+   packaged-content change needs a higher extension version, even when the CLI
+   version stays the same. Do not rebuild changed content under the old version.
+3. Run `python3 scripts/generate-vscode-themes.py`, then
+   `./scripts/update-vsix.sh`. The script writes
+   `vscode-extension/chromaticli-themes-<version>.vsix` using the manifest
+   version. Remove the previously tracked VSIX when its version changes.
+4. Run `python3 scripts/verify-themes.py`,
+   `python3 tests/verify-bundled-themes.py`, and
+   `python3 scripts/generate-preview.py`, in that order. Review the diff and
+   commit the matching registry, editor sources, manifest, new VSIX, and
+   previews together. The SVGs live under `web/public/gallery/themes/` and
+   are referenced by both docs galleries and the website.
+
+CI checks registry verification, preview freshness, and extension version and
+VSIX consistency. Add the `bundled-vsix` job to branch protection's required
+checks before the next release so a failing bundle check blocks merges.
 
 ## Adding a shell
 

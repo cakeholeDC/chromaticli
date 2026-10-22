@@ -27,11 +27,11 @@ export default function App() {
   const palette = theme?.palette;
   const paletteStyle = palette ? {
     '--theme-background': palette.background,
-    '--terminal-text': themeId === 'solarized-light' ? palette.ansi[10] : palette.foreground,
+    '--terminal-text': palette.foreground,
   } : undefined;
   const editorPaletteStyle = palette ? {
     '--editor-background': palette.background,
-    '--editor-foreground': themeId === 'solarized-light' ? palette.ansi[10] : palette.foreground,
+    '--editor-foreground': palette.foreground,
     '--editor-muted': palette.ansi[8],
     '--editor-keyword': palette.ansi[4],
     '--editor-string': palette.ansi[2],
@@ -114,9 +114,9 @@ export default function App() {
           <div className="about-copy">
             <p className="section-kicker">How it works</p>
             <h2 id="about-heading">Sync themes with your editor</h2>
-            <p><em><strong>chromaticli</strong></em>  applies matching themes to both the editor and the terminal palette.</p>
+            <p><em><strong>chromaticli</strong></em> applies matching themes to your editor and your terminal.</p>
             <p>Change directories and your terminal follows automatically.</p>
-            <pre className="code-block" tabIndex="0" aria-label="Local project example"><code>{'cd ~/my-project\nchromaticli set monokai'}</code></pre>
+            <pre className="code-block" tabIndex="0" aria-label="Local project example"><code>{'cd ~/my-project\nchromaticli set blue'}</code></pre>
           </div>
           <section className="demo-preview" aria-labelledby="demo-heading">
             <p className="section-kicker">See it in action</p>
@@ -208,6 +208,7 @@ export default function App() {
               <span className="requirement-note"> (Read more about <a href={docsUrl} target="_blank" rel="noopener noreferrer">terminal compatibility</a> and <a href={`${repositoryUrl}#troubleshooting`} target="_blank" rel="noopener noreferrer">troubleshooting</a>)</span>
             </li>
             <li>zsh, bash, or fish.</li>
+            <li>Supports <a href="https://code.visualstudio.com/" target="_blank" rel="noopener noreferrer">VS Code</a>.</li>
           </ul>
         </section>
       </main>

@@ -2,20 +2,30 @@ import registry from '../../themes.json';
 import { SiteFooter, SiteHeader } from './SiteChrome.jsx';
 
 const categories = [
-  ['dark-warm', 'Dark — warm / earthy'],
-  ['dark-cool', 'Dark — cool / blue'],
+  ['core', 'Core'],
   ['light', 'Light'],
+  ['dark', 'Dark'],
+  ['defaults', 'Defaults'],
 ];
+
+const hueOrder = ['red', 'orange', 'yellow', 'green', 'blue', 'indigo', 'violet', 'light', 'dark'];
+
+function hueIndex(id) {
+  const hue = id.replace(/^(light|dark)-/, '');
+  return hueOrder.indexOf(hue);
+}
 
 export default function Gallery() {
   return (
     <div className="page gallery-page">
-      <SiteHeader currentPage="gallery" />
+      <SiteHeader currentPage="themes" />
       <main className="gallery-main">
-        <h1>Theme gallery</h1>
-        <p className="gallery-intro">{Object.keys(registry.themes).length} built-in terminal themes.<br />Choose a theme and run <code>chromaticli set $theme_name</code></p>
+        <h1>Full spectrum</h1>
+        <p className="gallery-intro">{Object.keys(registry.themes).length} built-in themes; light and dark variants.</p>
         {categories.map(([category, label]) => {
-          const ids = Object.keys(registry.themes).filter((id) => registry.themes[id].category === category).sort();
+          const ids = Object.keys(registry.themes)
+            .filter((id) => registry.themes[id].category === category)
+            .sort((a, b) => hueIndex(a) - hueIndex(b));
           if (!ids.length) return null;
           return (
             <section className="gallery-section" aria-labelledby={category} key={category}>

@@ -19,8 +19,8 @@ export function advanceHeroLine(line) {
 }
 
 export function heroLineDelay(line) {
-  if (line.phase === 'pause-pronunciation') return 4000;
-  if (line.phase === 'pause-name') return 12000;
+  if (line.phase === 'pause-pronunciation') return 2000;
+  if (line.phase === 'pause-name') return 16000;
   if (line.phase.startsWith('deleting-')) return 65;
   return 115;
 }
