@@ -345,8 +345,8 @@ echo "=== --all-shells wires all shells present ==="
 
 HOME="$TESTHOME" "$CHROMATICLI" install --all-shells --force > /dev/null 2>&1 \
   || fail "install --all-shells exited nonzero"
-# Gate zsh assertion on PATH availability — CI (ubuntu-latest) may not have zsh.
-# zsh is always on macOS but is not guaranteed in Linux CI environments.
+# Gate this assertion for local environments that may not have zsh. The CI
+# smoke job installs zsh so the shell-specific cases run there.
 if command -v zsh > /dev/null 2>&1; then
   grep -Fq "# chromaticli" "$TESTHOME/.zshrc" \
     || fail "--all-shells did not wire .zshrc"
