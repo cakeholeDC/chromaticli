@@ -35,7 +35,9 @@ cd chromaticli
 ```
 
 Start a new shell session after installation. chromaticli supports zsh, bash,
-and fish. The Linux install uses the repository checkout as its source.
+and fish. The Linux install uses the repository checkout as its source. If a
+shell warns after an upgrade, run the recovery command it prints, then start a
+new shell session.
 
 ## Use
 

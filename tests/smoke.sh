@@ -42,6 +42,7 @@ case "$1" in
     fi ;;
   --install-extension)
     [[ $# == 3 && "$3" == --force && -s "$2" && "$2" == *.vsix ]] || exit 91
+    [[ "${CHROMATICLI_TEST_INSTALL_FAIL:-}" != 1 ]] || exit 94
     version=$(jq -er 'select(.publisher == "chromaticli" and .name == "chromaticli-themes") | .version | select(type == "string")' "$(dirname "$2")/package.json")
     [[ "$2" == "$(dirname "$2")/chromaticli-themes-$version.vsix" ]] || exit 92
     printf '%s\n' "$version" > "$work/code-version" ;;
@@ -372,8 +373,11 @@ CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" HOME="$TESTHOME" ZDOTDIR="$TESTHOME" \
   || fail "package-managed install exited nonzero"
 [[ ! -e "$TESTHOME/.local/bin/chromaticli" ]] \
   || fail "package-managed install copied the CLI to ~/.local/bin"
-[[ ! -d "$TESTHOME/.config/chromaticli" ]] \
-  || fail "package-managed install copied support files to ~/.config"
+[[ ! -e "$TESTHOME/.config/chromaticli/hook.zsh" && ! -e "$TESTHOME/.config/chromaticli/themes.json" ]] \
+  || fail "package-managed install copied managed support files to ~/.config"
+jq -e --arg version "$EXPECTED_VERSION" '.schema == 1 and .version == $version' \
+  "$TESTHOME/.config/chromaticli/install-version.json" >/dev/null \
+  || fail "package-managed install did not write its synchronized version marker"
 grep -Fq "source \"$MANAGED_LIBEXEC/hook.zsh\"" "$TESTHOME/.zshrc" \
   || fail "package-managed install did not wire the managed hook path"
 CHROMATICLI_LIBEXEC="$MANAGED_LIBEXEC" HOME="$TESTHOME" \
@@ -470,14 +474,35 @@ for mode in source managed; do
     LIFECYCLE_CLI="$CHROMATICLI"
     SUPPORT="$HOME/.config/chromaticli"
   fi
+  MARKER="$HOME/.config/chromaticli/install-version.json"
   INSTALL_CALL="--install-extension $SUPPORT/vscode-extension/chromaticli-themes-$BUNDLED_VERSION.vsix --force"
   rm -f "$TEST_WORK/code-version"
   : > "$TEST_WORK/code-calls"
   "$LIFECYCLE_CLI" install --shell bash --no-install > "$TEST_WORK/output" 2>&1 || fail "$mode --no-install setup failed"
   expect_code_calls
+  [[ ! -e "$MARKER" ]] || fail "$mode --no-install wrote a synchronized marker"
   [[ -s "$SUPPORT/vscode-extension/chromaticli-themes-$BUNDLED_VERSION.vsix" ]] || fail "$mode --no-install lost VSIX support"
+  if CHROMATICLI_TEST_INSTALL_FAIL=1 "$LIFECYCLE_CLI" install --shell bash > "$TEST_WORK/output" 2>&1; then
+    fail "$mode failed VSIX synchronization was reported as successful"
+  fi
+  expect_code_calls '--list-extensions --show-versions' "$INSTALL_CALL"
+  [[ ! -e "$MARKER" ]] || fail "$mode failed VSIX synchronization wrote a synchronized marker"
   "$LIFECYCLE_CLI" install --shell bash > "$TEST_WORK/output" 2>&1 || fail "$mode install failed"
   expect_code_calls '--list-extensions --show-versions' "$INSTALL_CALL" '--list-extensions --show-versions'
+  jq -e --arg version "$EXPECTED_VERSION" '.schema == 1 and .version == $version' "$MARKER" >/dev/null \
+    || fail "$mode successful install did not write the synchronized version marker"
+  "$LIFECYCLE_CLI" install --shell bash --no-install > "$TEST_WORK/output" 2>&1 || fail "$mode repeated --no-install failed"
+  expect_code_calls
+  [[ ! -e "$MARKER" ]] || fail "$mode --no-install kept a synchronized marker"
+  "$LIFECYCLE_CLI" install --shell bash > "$TEST_WORK/output" 2>&1 || fail "$mode reinstall after --no-install failed"
+  expect_code_calls '--list-extensions --show-versions'
+  jq -e --arg version "$EXPECTED_VERSION" '.schema == 1 and .version == $version' "$MARKER" >/dev/null \
+    || fail "$mode reinstall did not restore the synchronized marker"
+  if CHROMATICLI_TEST_INSTALL_FAIL=1 "$LIFECYCLE_CLI" install --shell bash --force > "$TEST_WORK/output" 2>&1; then
+    fail "$mode failed forced VSIX synchronization was reported as successful"
+  fi
+  expect_code_calls '--list-extensions --show-versions' "$INSTALL_CALL"
+  [[ ! -e "$MARKER" ]] || fail "$mode failed synchronization left a synchronized marker"
   "$LIFECYCLE_CLI" install --shell bash > "$TEST_WORK/output" 2>&1 || fail "$mode repeat install failed"
   expect_code_calls '--list-extensions --show-versions'
   if [[ "$mode" == source ]]; then LIFECYCLE_CLI="$HOME/.local/bin/chromaticli"; fi
@@ -612,5 +637,7 @@ for hook_shell in bash zsh fish; do
   pass "$hook_shell current / legacy labels and legacy pairs emit matching foreground, background, cursor, and all ANSI colors"
 done
 
+"$REPO_ROOT/tests/version-sync.sh"
+bash "$REPO_ROOT/tests/zsh-startup.sh"
 echo ""
 echo "All smoke checks passed."
