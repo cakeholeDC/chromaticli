@@ -45,7 +45,7 @@ For release builds, supply the selected release tag explicitly:
 
 <!-- x-release-please-start-version -->
 ```sh
-CHROMATICLI_RELEASE_TAG=v0.1.0 pnpm build
+CHROMATICLI_RELEASE_TAG=v0.2.0 pnpm build
 ```
 <!-- x-release-please-end -->
 

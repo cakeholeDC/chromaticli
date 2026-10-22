@@ -30,7 +30,7 @@ install from the source checkout:
 
 <!-- x-release-please-start-version -->
 ```sh
-git clone --branch v0.1.0 https://github.com/cakeholeDC/chromaticli.git
+git clone --branch v0.2.0 https://github.com/cakeholeDC/chromaticli.git
 cd chromaticli
 ./chromaticli install
 ```

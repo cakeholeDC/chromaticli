@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-CHROMATICLI_VERSION="0.1.0" # x-release-please-version
+CHROMATICLI_VERSION="0.2.0" # x-release-please-version
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CHROMATICLI_MANAGED_DIR="${CHROMATICLI_LIBEXEC:-}"
 CHROMATICLI_SOURCE_DIR="${CHROMATICLI_MANAGED_DIR:-$SCRIPT_DIR}"
