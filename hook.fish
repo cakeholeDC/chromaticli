@@ -41,7 +41,7 @@ function _chromaticli_check_install_version --on-event fish_prompt
         set -l reported ("$cli" --version 2>/dev/null)
         set result (jq -er --arg reported "$reported" '
                 if .schema == 1 and (.version | type) == "string" then
-                  if ($reported | test("^chromaticli [0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.+-]+)?$") | not) then "unverifiable"
+                  if ($reported | test("^chromaticli [0-9]+[.][0-9]+[.][0-9]+([-+][0-9A-Za-z.+-]+)?$") | not) then "unverifiable"
                   elif $reported == ("chromaticli " + .version) then "current"
                   else "stale" end
                 else "unverifiable" end

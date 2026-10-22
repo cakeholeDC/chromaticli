@@ -179,7 +179,7 @@ EOF
       invalid) printf '{"schema":99,"version":"0.0.1"}\n' > "$dir/.config/chromaticli/install-version.json" ;;
     esac
     # shellcheck disable=SC2016 # Fish expands these variables in its child process.
-    HOME="$dir" XDG_CONFIG_HOME="$dir/.config" PATH="$dir/conflict:$PATH" fish -c '
+    HOME="$dir" XDG_CONFIG_HOME="$dir/.config" PATH="$dir/conflict:$PATH" fish --no-config -c '
       source "$HOME/.config/chromaticli/hook.fish"
       functions -e _chromaticli_apply
       emit fish_prompt

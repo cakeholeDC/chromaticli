@@ -256,14 +256,36 @@ grep -Fq "hook.zsh" "$TESTHOME/.zshrc" \
 pass "install --shell zsh wires .zshrc and copies all hooks"
 
 echo ""
-echo "=== install --shell bash wires .bash_profile ==="
+echo "=== install --shell bash wires login and non-login startup files ==="
 
 HOME="$TESTHOME" "$CHROMATICLI" install --shell bash --force > /dev/null 2>&1 || fail "install --shell bash exited nonzero"
-grep -Fq "# chromaticli" "$TESTHOME/.bash_profile" \
-  || fail "install --shell bash did not write # chromaticli marker to .bash_profile"
-grep -Fq "hook.bash" "$TESTHOME/.bash_profile" \
-  || fail "install --shell bash did not write hook.bash source line to .bash_profile"
-pass "install --shell bash wires .bash_profile"
+for bash_rc in .bash_profile .bashrc; do
+  grep -Fq "# chromaticli" "$TESTHOME/$bash_rc" \
+    || fail "install --shell bash did not write # chromaticli marker to $bash_rc"
+  grep -Fq "hook.bash" "$TESTHOME/$bash_rc" \
+    || fail "install --shell bash did not write hook.bash source line to $bash_rc"
+done
+pass "install --shell bash wires login and non-login startup files"
+
+echo ""
+echo "=== non-login interactive bash applies theme after cd ==="
+
+BASH_PROJECT="$TEST_WORK/bash-project"
+mkdir -p "$BASH_PROJECT/.vscode"
+printf '%s\n' '{"workbench.colorTheme":"chromaticli blue"}' > "$BASH_PROJECT/.vscode/settings.json"
+BASH_TEST_OUTPUT=$(HOME="$TESTHOME" CHROMATICLI_TEST_PROJECT="$BASH_PROJECT" TERM_PROGRAM=xterm \
+  bash --noprofile --rcfile "$TESTHOME/.bashrc" -ic '
+    _chromaticli_osc() { printf "%s\n" "$1"; }
+    _CHROMATICLI_SYNC_CHECKED=1
+    cd "$CHROMATICLI_TEST_PROJECT" || exit 1
+    _chromaticli_prompt_hook
+    printf "active=%s\n" "${_CHROMATICLI_ACTIVE-}"
+  ' 2>/dev/null)
+printf '%s\n' "$BASH_TEST_OUTPUT" | grep -q '^active=blue$' \
+  || { printf '%s\n' "$BASH_TEST_OUTPUT" >&2; fail "non-login interactive bash did not apply theme after cd"; }
+printf '%s\n' "$BASH_TEST_OUTPUT" | grep -q '^10;#' \
+  || fail "non-login interactive bash did not emit OSC palette colors"
+pass "non-login interactive bash loads the hook and applies the selected palette after cd"
 
 echo ""
 echo "=== install --shell fish writes conf.d shim ==="
@@ -293,6 +315,7 @@ HOME="$TESTHOME" "$CHROMATICLI" install --shell zsh  --force > /dev/null 2>&1
 HOME="$TESTHOME" "$CHROMATICLI" install --shell bash --force > /dev/null 2>&1
 grep -Fq "# chromaticli" "$TESTHOME/.zshrc"        || fail "zshrc marker missing after additive install"
 grep -Fq "# chromaticli" "$TESTHOME/.bash_profile"  || fail "bash_profile marker missing after additive install"
+grep -Fq "# chromaticli" "$TESTHOME/.bashrc"         || fail "bashrc marker missing after additive install"
 pass "install is additive: both shells wired independently"
 
 echo ""
@@ -314,7 +337,10 @@ FISH_SHIM_INSTALLED=0
 # whether fish is on PATH. The install command does not require fish to be installed.
 HOME="$TESTHOME" "$CHROMATICLI" uninstall > /dev/null 2>&1 || fail "uninstall exited nonzero"
 grep -Fq "# chromaticli" "$TESTHOME/.zshrc"       2>/dev/null && fail "uninstall left # chromaticli in .zshrc"
-grep -Fq "# chromaticli" "$TESTHOME/.bash_profile" 2>/dev/null && fail "uninstall left # chromaticli in .bash_profile"
+for bash_rc in .bash_profile .bashrc; do
+  grep -Fq "# chromaticli" "$TESTHOME/$bash_rc" 2>/dev/null \
+    && fail "uninstall left # chromaticli in $bash_rc"
+done
 if (( FISH_SHIM_INSTALLED )); then
   [[ ! -f "$TESTHOME/.config/fish/conf.d/chromaticli.fish" ]] \
     || fail "uninstall left fish conf.d shim"
@@ -354,6 +380,8 @@ fi
 # bash is always present
 grep -Fq "# chromaticli" "$TESTHOME/.bash_profile" \
   || fail "--all-shells did not wire .bash_profile"
+grep -Fq "# chromaticli" "$TESTHOME/.bashrc" \
+  || fail "--all-shells did not wire .bashrc"
 pass "install --all-shells wires available shells"
 
 echo ""
@@ -604,8 +632,9 @@ for hook_shell in bash zsh fish; do
       set -e CHROMATICLI_FORCE
       source $argv[1]
       function _chromaticli_osc; printf "%s\n" $argv[1]; end
-      function defaults; printf "%s\n" $appearance; end
+      function defaults; printf "%s\n" $smoke_appearance; end
       while read -l case_dir appearance
+        set -g smoke_appearance $appearance
         set -e CHROMATICLI_FORCE
         cd $case_dir
         set -e _CHROMATICLI_ACTIVE
@@ -633,7 +662,10 @@ for hook_shell in bash zsh fish; do
       done < "$2"
     ' smoke-hook "$REPO_ROOT/hook.$hook_shell" "$TEST_WORK/hook-cases" > "$TEST_WORK/actual-osc"
   fi
-  cmp "$TEST_WORK/expected-osc" "$TEST_WORK/actual-osc" || fail "$hook_shell hook selected or emitted the wrong palette"
+  if ! cmp -s "$TEST_WORK/expected-osc" "$TEST_WORK/actual-osc"; then
+    diff -u "$TEST_WORK/expected-osc" "$TEST_WORK/actual-osc" >&2 || true
+    fail "$hook_shell hook selected or emitted the wrong palette"
+  fi
   pass "$hook_shell current / legacy labels and legacy pairs emit matching foreground, background, cursor, and all ANSI colors"
 done
 
